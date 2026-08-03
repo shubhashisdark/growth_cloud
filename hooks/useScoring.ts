@@ -1,6 +1,8 @@
 "use client";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchBackendJson } from "@/lib/backend";
+import { fetchBackendJson, getWorkspaceAuthHeaders } from "@/lib/backend";
+import { useAuthSessionStore } from "@/lib/stores/auth-session";
 
 export type ScoringCondition = {
   field: string;
@@ -51,61 +53,84 @@ export type AiScoringHint = {
   points: number;
 };
 
+function useAccessToken() {
+  return useAuthSessionStore((state) => state.session?.accessToken ?? "");
+}
+
+function useSessionWorkspaceId() {
+  return useAuthSessionStore(
+    (state) => state.session?.workspaceId ?? state.session?.user?.memberships?.[0]?.workspaceId ?? ""
+  );
+}
+
 export function useScoringRules(workspaceId: string) {
+  const token = useAccessToken();
   return useQuery({
-    queryKey: ["scoring-rules", workspaceId],
+    queryKey: ["scoring-rules", workspaceId, token],
     queryFn: () =>
       fetchBackendJson<{ data: { rules: ScoringRule[]; stats: ScoringStats } }>(
         `/api/v1/scoring/rules?workspaceId=${workspaceId}`,
-        { method: "GET" }
+        { method: "GET", headers: getWorkspaceAuthHeaders(workspaceId, token) }
       ).then((r) => r.data),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && !!token,
   });
 }
 
-export function useScoreHistory(leadId: string, page = 1) {
+export function useScoreHistory(leadId: string, page = 1, workspaceId?: string) {
+  const token = useAccessToken();
+  const sessionWorkspace = useSessionWorkspaceId();
+  const ws = workspaceId || sessionWorkspace;
+
   return useQuery({
-    queryKey: ["score-history", leadId, page],
+    queryKey: ["score-history", leadId, page, ws, token],
     queryFn: () =>
       fetchBackendJson<{ data: { items: ScoreHistoryEntry[] }; meta: { total: number; pages: number } }>(
-        `/api/v1/scoring/history/${leadId}?page=${page}&limit=50`,
-        { method: "GET" }
+        `/api/v1/scoring/history/${leadId}?workspaceId=${encodeURIComponent(ws)}&page=${page}&limit=50`,
+        { method: "GET", headers: getWorkspaceAuthHeaders(ws, token) }
       ),
-    enabled: !!leadId,
+    enabled: !!leadId && !!ws && !!token,
   });
 }
 
 export function useScoringLeaderboard(workspaceId: string) {
+  const token = useAccessToken();
   return useQuery({
-    queryKey: ["scoring-leaderboard", workspaceId],
+    queryKey: ["scoring-leaderboard", workspaceId, token],
     queryFn: () =>
-      fetchBackendJson<{ data: { top: Array<{ id: string; firstName: string; lastName: string; email: string; score: number; lifecycleStage: string }>; bottom: Array<{ id: string; firstName: string; lastName: string; email: string; score: number; lifecycleStage: string }> } }>(
-        `/api/v1/scoring/leaderboard?workspaceId=${workspaceId}`,
-        { method: "GET" }
-      ).then((r) => r.data),
-    enabled: !!workspaceId,
+      fetchBackendJson<{
+        data: {
+          top: Array<{ id: string; firstName: string; lastName: string; email: string; score: number; lifecycleStage: string }>;
+          bottom: Array<{ id: string; firstName: string; lastName: string; email: string; score: number; lifecycleStage: string }>;
+        };
+      }>(`/api/v1/scoring/leaderboard?workspaceId=${workspaceId}`, {
+        method: "GET",
+        headers: getWorkspaceAuthHeaders(workspaceId, token),
+      }).then((r) => r.data),
+    enabled: !!workspaceId && !!token,
   });
 }
 
 export function useAiScoringHints(workspaceId: string) {
+  const token = useAccessToken();
   return useQuery({
-    queryKey: ["ai-scoring-hints", workspaceId],
+    queryKey: ["ai-scoring-hints", workspaceId, token],
     queryFn: () =>
       fetchBackendJson<{ data: { hints: AiScoringHint[] } }>(
         `/api/v1/scoring/ai-hints?workspaceId=${workspaceId}`,
-        { method: "GET" }
+        { method: "GET", headers: getWorkspaceAuthHeaders(workspaceId, token) }
       ).then((r) => r.data),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && !!token,
   });
 }
 
 export function useCreateScoringRule() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
     mutationFn: (data: Omit<ScoringRule, "id" | "createdAt" | "updatedAt">) =>
       fetchBackendJson<{ data: ScoringRule }>("/api/v1/scoring/rules", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getWorkspaceAuthHeaders(data.workspaceId, token) },
         body: JSON.stringify(data),
       }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["scoring-rules"] }),
@@ -114,12 +139,13 @@ export function useCreateScoringRule() {
 
 export function useUpdateScoringRule() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
-    mutationFn: ({ id, ...data }: Partial<ScoringRule> & { id: string }) =>
+    mutationFn: ({ id, workspaceId, ...data }: Partial<ScoringRule> & { id: string; workspaceId?: string }) =>
       fetchBackendJson<{ data: ScoringRule }>(`/api/v1/scoring/rules/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json", ...getWorkspaceAuthHeaders(workspaceId, token) },
+        body: JSON.stringify({ workspaceId, ...data }),
       }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["scoring-rules"] }),
   });
@@ -127,21 +153,27 @@ export function useUpdateScoringRule() {
 
 export function useDeleteScoringRule() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
-    mutationFn: (id: string) => fetchBackendJson(`/api/v1/scoring/rules/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) =>
+      fetchBackendJson(`/api/v1/scoring/rules/${id}`, {
+        method: "DELETE",
+        headers: getWorkspaceAuthHeaders(undefined, token),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["scoring-rules"] }),
   });
 }
 
 export function useRecalculateScores() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
     mutationFn: ({ workspaceId }: { workspaceId: string }) =>
       fetchBackendJson<{ data: { updated: number; total: number } }>(
         `/api/v1/scoring/recalculate?workspaceId=${workspaceId}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getWorkspaceAuthHeaders(workspaceId, token) },
           body: JSON.stringify({ workspaceId }),
         }
       ).then((r) => r.data),
@@ -154,16 +186,24 @@ export function useRecalculateScores() {
 
 export function useAdjustScore() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
-    mutationFn: ({ leadId, delta, reason, workspaceId }: { leadId: string; delta: number; reason: string; workspaceId: string }) =>
-      fetchBackendJson<{ data: { score: number } }>(
-        `/api/v1/scoring/adjust?workspaceId=${workspaceId}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ leadId, delta, reason }),
-        }
-      ).then((r) => r.data),
+    mutationFn: ({
+      leadId,
+      delta,
+      reason,
+      workspaceId,
+    }: {
+      leadId: string;
+      delta: number;
+      reason: string;
+      workspaceId: string;
+    }) =>
+      fetchBackendJson<{ data: { score: number } }>(`/api/v1/scoring/adjust?workspaceId=${workspaceId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getWorkspaceAuthHeaders(workspaceId, token) },
+        body: JSON.stringify({ leadId, delta, reason }),
+      }).then((r) => r.data),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ["score-history", vars.leadId] }),
   });
 }

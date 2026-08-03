@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchBackendJson, getAuthHeaders } from "@/lib/backend";
+import { fetchBackendJson, getWorkspaceAuthHeaders } from "@/lib/backend";
+import { useAuthSessionStore } from "@/lib/stores/auth-session";
 
 export type DateRange = "7d" | "30d" | "90d" | "12m" | "all";
 
@@ -48,19 +49,21 @@ export type AnalyticsOverview = {
 };
 
 export function useAnalyticsOverview(workspaceId: string, range: DateRange = "30d") {
+  const token = useAuthSessionStore((state) => state.session?.accessToken ?? "");
+
   return useQuery({
-    queryKey: ["analytics-overview", workspaceId, range],
+    queryKey: ["analytics-overview", workspaceId, range, token],
     queryFn: () =>
       fetchBackendJson<{ data: AnalyticsOverview }>(
         `/api/v1/analytics/overview?workspaceId=${workspaceId}&range=${range}`,
-        { headers: getAuthHeaders() }
+        { headers: getWorkspaceAuthHeaders(workspaceId, token) }
       ).then((r) => r.data),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && !!token,
   });
 }
 
 export async function downloadAnalyticsExport(workspaceId: string, format: "csv" | "json", range: DateRange = "30d") {
-  const headers = getAuthHeaders();
+  const headers = getWorkspaceAuthHeaders(workspaceId);
   const url = `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000"}/api/v1/analytics/export?workspaceId=${workspaceId}&format=${format}&range=${range}`;
 
   const res = await fetch(url, { headers });

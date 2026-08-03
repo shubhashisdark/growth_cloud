@@ -193,9 +193,20 @@ export default function CreateApiKeyPage() {
           <aside className="rounded-2xl border border-white/[0.08] bg-[#111827] p-6">
             <h2 className="text-lg font-semibold">Recommended flow</h2>
             <div className="mt-4 space-y-3 text-sm text-[#94A3B8]">
-              <p>1. Create the API key from the dashboard.</p>
-              <p>2. Copy the plaintext secret once and store it securely.</p>
-              <p>3. Use the key in integrations or SDK initialization.</p>
+              <p>1. Create a Public (SDK) key from the dashboard.</p>
+              <p>2. Copy the plaintext key once and store it securely.</p>
+              <p>
+                3. Install{" "}
+                <a
+                  href="https://www.npmjs.com/package/@shubhashis9556/growthcloud-sdk"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#38BDF8] hover:underline"
+                >
+                  @shubhashis9556/growthcloud-sdk
+                </a>{" "}
+                then initialize with your public key.
+              </p>
               <p>4. Monitor usage from the API usage view.</p>
             </div>
           </aside>

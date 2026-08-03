@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchBackendJson } from "@/lib/backend";
+import { fetchBackendJson, getWorkspaceAuthHeaders } from "@/lib/backend";
+import { useAuthSessionStore } from "@/lib/stores/auth-session";
 
 export type WorkflowStep = {
   index: number;
@@ -61,58 +62,82 @@ export type WorkflowRunDetail = WorkflowRun & {
   }>;
 };
 
+function useAccessToken() {
+  return useAuthSessionStore((state) => state.session?.accessToken ?? "");
+}
+
 export function useWorkflows(workspaceId: string) {
+  const token = useAccessToken();
   return useQuery({
-    queryKey: ["workflows", workspaceId],
+    queryKey: ["workflows", workspaceId, token],
     queryFn: () =>
       fetchBackendJson<{ data: { items: Workflow[] }; meta: { total: number } }>(
         `/api/v1/workflows?workspaceId=${workspaceId}`,
-        { method: "GET" }
+        { method: "GET", headers: getWorkspaceAuthHeaders(workspaceId, token) }
       ).then((r) => r.data),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && !!token,
   });
 }
 
-export function useWorkflow(workflowId: string) {
+export function useWorkflow(workflowId: string, workspaceId?: string) {
+  const token = useAccessToken();
+  const sessionWorkspace =
+    useAuthSessionStore((state) => state.session?.workspaceId ?? state.session?.user?.memberships?.[0]?.workspaceId ?? "");
+  const ws = workspaceId || sessionWorkspace;
+
   return useQuery({
-    queryKey: ["workflow", workflowId],
+    queryKey: ["workflow", workflowId, ws, token],
     queryFn: () =>
-      fetchBackendJson<{ data: Workflow }>(`/api/v1/workflows/${workflowId}`, { method: "GET" }).then((r) => r.data),
-    enabled: !!workflowId,
+      fetchBackendJson<{ data: Workflow }>(
+        `/api/v1/workflows/${workflowId}?workspaceId=${encodeURIComponent(ws)}`,
+        { method: "GET", headers: getWorkspaceAuthHeaders(ws, token) }
+      ).then((r) => r.data),
+    enabled: !!workflowId && !!ws && !!token,
   });
 }
 
-export function useWorkflowRuns(workflowId: string, page = 1, limit = 20) {
+export function useWorkflowRuns(workflowId: string, page = 1, limit = 20, workspaceId?: string) {
+  const token = useAccessToken();
+  const sessionWorkspace =
+    useAuthSessionStore((state) => state.session?.workspaceId ?? state.session?.user?.memberships?.[0]?.workspaceId ?? "");
+  const ws = workspaceId || sessionWorkspace;
+
   return useQuery({
-    queryKey: ["workflow-runs", workflowId, page],
+    queryKey: ["workflow-runs", workflowId, page, ws, token],
     queryFn: () =>
       fetchBackendJson<{ data: { items: WorkflowRun[] }; meta: { total: number; pages: number } }>(
-        `/api/v1/workflows/${workflowId}/runs?page=${page}&limit=${limit}`,
-        { method: "GET" }
+        `/api/v1/workflows/${workflowId}/runs?workspaceId=${encodeURIComponent(ws)}&page=${page}&limit=${limit}`,
+        { method: "GET", headers: getWorkspaceAuthHeaders(ws, token) }
       ),
-    enabled: !!workflowId,
+    enabled: !!workflowId && !!ws && !!token,
   });
 }
 
-export function useWorkflowRunDetail(workflowId: string, runId: string) {
+export function useWorkflowRunDetail(workflowId: string, runId: string, workspaceId?: string) {
+  const token = useAccessToken();
+  const sessionWorkspace =
+    useAuthSessionStore((state) => state.session?.workspaceId ?? state.session?.user?.memberships?.[0]?.workspaceId ?? "");
+  const ws = workspaceId || sessionWorkspace;
+
   return useQuery({
-    queryKey: ["workflow-run", runId],
+    queryKey: ["workflow-run", runId, ws, token],
     queryFn: () =>
       fetchBackendJson<{ data: WorkflowRunDetail }>(
-        `/api/v1/workflows/${workflowId}/runs/${runId}`,
-        { method: "GET" }
+        `/api/v1/workflows/${workflowId}/runs/${runId}?workspaceId=${encodeURIComponent(ws)}`,
+        { method: "GET", headers: getWorkspaceAuthHeaders(ws, token) }
       ).then((r) => r.data),
-    enabled: !!workflowId && !!runId,
+    enabled: !!workflowId && !!runId && !!ws && !!token,
   });
 }
 
 export function useCreateWorkflow() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
     mutationFn: (data: Omit<Workflow, "id" | "runCount" | "errorCount" | "lastRunAt" | "createdAt" | "updatedAt" | "stepCount">) =>
       fetchBackendJson<{ data: Workflow }>("/api/v1/workflows", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getWorkspaceAuthHeaders(data.workspaceId, token) },
         body: JSON.stringify(data),
       }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workflows"] }),
@@ -121,12 +146,13 @@ export function useCreateWorkflow() {
 
 export function useUpdateWorkflow() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
-    mutationFn: ({ id, ...data }: Partial<Workflow> & { id: string }) =>
+    mutationFn: ({ id, workspaceId, ...data }: Partial<Workflow> & { id: string; workspaceId?: string }) =>
       fetchBackendJson<{ data: Workflow }>(`/api/v1/workflows/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json", ...getWorkspaceAuthHeaders(workspaceId, token) },
+        body: JSON.stringify({ workspaceId, ...data }),
       }).then((r) => r.data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["workflows"] });
@@ -137,20 +163,36 @@ export function useUpdateWorkflow() {
 
 export function useDeleteWorkflow() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
-    mutationFn: (id: string) => fetchBackendJson(`/api/v1/workflows/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) =>
+      fetchBackendJson(`/api/v1/workflows/${id}`, {
+        method: "DELETE",
+        headers: getWorkspaceAuthHeaders(undefined, token),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workflows"] }),
   });
 }
 
 export function useTriggerWorkflow() {
   const qc = useQueryClient();
+  const token = useAccessToken();
   return useMutation({
-    mutationFn: ({ workflowId, leadId, input }: { workflowId: string; leadId?: string; input?: Record<string, unknown> }) =>
+    mutationFn: ({
+      workflowId,
+      leadId,
+      input,
+      workspaceId,
+    }: {
+      workflowId: string;
+      leadId?: string;
+      input?: Record<string, unknown>;
+      workspaceId?: string;
+    }) =>
       fetchBackendJson(`/api/v1/workflows/${workflowId}/trigger`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId, input }),
+        headers: { "Content-Type": "application/json", ...getWorkspaceAuthHeaders(workspaceId, token) },
+        body: JSON.stringify({ leadId, input, workspaceId }),
       }),
     onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ["workflow-runs", vars.workflowId] }),
   });

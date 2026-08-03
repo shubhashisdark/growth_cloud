@@ -22,7 +22,8 @@ export function createApp() {
   const app = express();
 
   app.use(cors({ origin: config.corsOrigin }));
-  app.use(express.json());
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.text({ type: ["text/plain", "text/csv"], limit: "2mb" }));
 
   app.get("/health", (_request: Request, response: Response) => {
     response.json({

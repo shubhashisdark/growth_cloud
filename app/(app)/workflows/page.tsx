@@ -77,7 +77,7 @@ export default function WorkflowsPage() {
 
   const handleTrigger = async (id: string) => {
     setTriggeringId(id);
-    await triggerWorkflow.mutateAsync({ workflowId: id });
+    await triggerWorkflow.mutateAsync({ workflowId: id, workspaceId });
     setTriggeringId(null);
     refetch();
   };

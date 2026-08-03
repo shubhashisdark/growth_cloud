@@ -1,76 +1,53 @@
-# @growthcloud/sdk
+# @shubhashis9556/growthcloud-sdk
 
-Official JavaScript and TypeScript SDK for **Growth Cloud** marketing automation, lead tracking, and analytics platform.
+Official JavaScript and TypeScript SDK for **Growth Cloud** marketing automation, lead tracking, and analytics.
 
 ---
 
-## 📦 Installation
+## Installation
 
 ```bash
-# npm
-npm install @growthcloud/sdk
-
-# yarn
-yarn add @growthcloud/sdk
-
-# pnpm
-pnpm add @growthcloud/sdk
+npm install @shubhashis9556/growthcloud-sdk
 ```
+
+Package: [https://www.npmjs.com/package/@shubhashis9556/growthcloud-sdk](https://www.npmjs.com/package/@shubhashis9556/growthcloud-sdk)
 
 ---
 
-## Quickstart Guide
+## Quickstart
 
-### 1. Initialize the SDK
-
-Obtain your **Public SDK Key** from the Growth Cloud Integrations dashboard (`pk_live_...`).
+Get your **Public SDK Key** from Growth Cloud → Integrations (`gc_pub_...`).
 
 ```typescript
-import { init } from '@growthcloud/sdk';
+import { init } from '@shubhashis9556/growthcloud-sdk';
 
 const growthcloud = init({
-  publicKey: 'pk_live_abcdef1234567890',
-  autoCaptureForms: true, // Automatically captures HTML form submissions
+  publicKey: 'gc_pub_your_key_here',
+  baseUrl: 'https://your-api.example.com', // optional, defaults to http://localhost:4000
+  autoCaptureForms: true,
 });
 ```
 
----
-
-### 2. Identify Leads
-
-Associate web visitor traits with an email address.
+### Identify leads
 
 ```typescript
 await growthcloud.identify('sarah@acmecorp.com', {
   firstName: 'Sarah',
   lastName: 'Connor',
   company: 'Acme Corp',
-  lifecycleStage: 'mql',
-  customFields: {
-    planType: 'Enterprise',
-  },
 });
 ```
 
----
-
-### 3. Track Custom Events
-
-Track visitor behavior and custom actions for workflow automation and scoring.
+### Track events
 
 ```typescript
-await growthcloud.track('demo_requested', {
-  category: 'onboarding',
-  value: 500,
-  pageUrl: window.location.href,
+await growthcloud.track('added_to_cart', {
+  productId: 'sku_123',
+  value: 2999,
 });
 ```
 
----
-
-### 4. Lead Synchronization (`leadSync`)
-
-Synchronize full contact lead records directly from server-side Node.js or frontend forms.
+### Sync a lead / submit a form
 
 ```typescript
 await growthcloud.leadSync({
@@ -78,45 +55,17 @@ await growthcloud.leadSync({
   firstName: 'Alex',
   lastName: 'Rivera',
   company: 'TechFirm',
-  source: 'website_calculator',
-  status: 'active',
+  source: 'website',
 });
-```
 
----
-
-### 5. Form Submissions (`submitForm`)
-
-Manually submit form submissions to trigger workflow automation and lead creation.
-
-```typescript
 await growthcloud.submitForm('contact_us_form', {
   email: 'user@domain.com',
   name: 'Taylor Smith',
-  message: 'Inquiring about enterprise pricing plans.',
 });
 ```
 
 ---
 
-## 🌐 HTML Script Tag Embed
+## Security
 
-For non-Node projects, embed directly via Script Tag:
-
-```html
-<script src="https://cdn.growthcloud.io/v1/sdk.js"></script>
-<script>
-  window.growthcloud.init({
-    publicKey: 'pk_live_abcdef1234567890',
-    autoCaptureForms: true
-  });
-
-  window.growthcloud.track('page_viewed', { path: window.location.pathname });
-</script>
-```
-
----
-
-## Security & Public Key Authentication
-
-The SDK communicates via public API keys (`pk_live_...`). Public keys permit lead identification, event tracking, and form capture while restricting sensitive backend configuration access.
+Use **public** keys (`gc_pub_...`) in browsers. Keep secret keys (`gc_live_...`) on the server only.

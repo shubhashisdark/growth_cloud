@@ -271,9 +271,21 @@ export class WorkspacesService {
     const baseUrl = getConfig().appBaseUrl || "http://localhost:3000";
     const inviteUrl = `${baseUrl}/accept-invitation/${tokenMaterial.plaintextToken}`;
     const emailPayload = buildInvitationEmail(inviter?.name || "A team member", workspace.name, inviteUrl);
-    await sendEmailWithFallback({ to: normalizedEmail, ...emailPayload });
 
-    await logAudit("workspace.invitation_sent", "WorkspaceInvitation", invitation.id, workspaceId, actorUserId, { email: normalizedEmail, role: input.role });
+    let emailDelivered = false;
+    let emailError: string | null = null;
+    try {
+      await sendEmailWithFallback({ to: normalizedEmail, ...emailPayload });
+      emailDelivered = true;
+    } catch (error) {
+      emailError = error instanceof Error ? error.message : "Invitation email could not be delivered";
+    }
+
+    await logAudit("workspace.invitation_sent", "WorkspaceInvitation", invitation.id, workspaceId, actorUserId, {
+      email: normalizedEmail,
+      role: input.role,
+      emailDelivered,
+    });
 
     return {
       status: 201,
@@ -285,7 +297,10 @@ export class WorkspacesService {
           role: invitation.role,
           status: invitation.status,
           expiresAt: invitation.expiresAt,
-          inviteToken: getConfig().exposeResetTokenInResponse ? tokenMaterial.plaintextToken : null
+          inviteUrl,
+          inviteToken: tokenMaterial.plaintextToken,
+          emailDelivered,
+          emailError,
         }
       }
     };

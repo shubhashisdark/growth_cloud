@@ -1,6 +1,6 @@
 const DEFAULT_BACKEND_URL = "http://localhost:4000";
 
-import type { AuthUser } from "@/lib/stores/auth-session";
+import { useAuthSessionStore, type AuthUser } from "@/lib/stores/auth-session";
 
 export interface BackendErrorResponse {
   data: null;
@@ -191,7 +191,7 @@ export function acceptInvitation(token: string, name: string, password: string) 
 // WORKSPACE API CALLS
 export function getWorkspaces(accessToken?: string) {
   return fetchBackendJson<BackendSuccessResponse<{ workspaces: Workspace[] }>>("/api/v1/workspaces", {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    headers: getAuthHeaders(accessToken),
   });
 }
 
@@ -225,7 +225,7 @@ export function updateWorkspace(accessToken: string, workspaceId: string, payloa
 
 export function getWorkspaceMembers(workspaceId: string, accessToken?: string) {
   return fetchBackendJson<BackendSuccessResponse<{ items: WorkspaceMember[] }>>(`/api/v1/workspaces/${workspaceId}/members`, {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    headers: getWorkspaceAuthHeaders(workspaceId, accessToken),
   });
 }
 
@@ -234,7 +234,7 @@ export function createWorkspaceMember(payload: { workspaceId: string; name: stri
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...getWorkspaceAuthHeaders(payload.workspaceId, accessToken),
     },
     body: JSON.stringify({ name: payload.name, email: payload.email, role: payload.role }),
   });
@@ -259,7 +259,16 @@ export function updateWorkspaceMemberRole(accessToken: string, workspaceId: stri
 }
 
 export function sendInvitation(accessToken: string, workspaceId: string, payload: { email: string; role: WorkspaceMember["role"] }) {
-  return fetchBackendJson<BackendSuccessResponse<{ invitation: WorkspaceInvitation & { inviteToken?: string | null } }>>(`/api/v1/workspaces/${workspaceId}/invitations`, {
+  return fetchBackendJson<
+    BackendSuccessResponse<{
+      invitation: WorkspaceInvitation & {
+        inviteToken?: string | null;
+        inviteUrl?: string | null;
+        emailDelivered?: boolean;
+        emailError?: string | null;
+      };
+    }>
+  >(`/api/v1/workspaces/${workspaceId}/invitations`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -299,7 +308,7 @@ export interface ApiUsageItem {
 export function getApiKeys(workspaceId?: string, accessToken?: string) {
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
   return fetchBackendJson<BackendSuccessResponse<{ items: ApiKeySummary[]; total: number }>>(`/api/v1/api-keys${query}`, {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    headers: getWorkspaceAuthHeaders(workspaceId, accessToken),
   });
 }
 
@@ -308,7 +317,7 @@ export function createApiKey(payload: { workspaceId?: string; name: string; type
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...getWorkspaceAuthHeaders(payload.workspaceId, accessToken),
     },
     body: JSON.stringify(payload),
   });
@@ -460,7 +469,20 @@ export interface UpdateLeadPayload {
 }
 
 export function getAuthHeaders(token?: string): Record<string, string> {
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const resolved = token ?? useAuthSessionStore.getState().session?.accessToken;
+  return resolved ? { Authorization: `Bearer ${resolved}` } : {};
+}
+
+export function getWorkspaceAuthHeaders(workspaceId?: string, token?: string): Record<string, string> {
+  const session = useAuthSessionStore.getState().session;
+  const resolvedToken = token ?? session?.accessToken;
+  const resolvedWorkspace =
+    workspaceId ?? session?.workspaceId ?? session?.user?.memberships?.[0]?.workspaceId;
+
+  return {
+    ...(resolvedToken ? { Authorization: `Bearer ${resolvedToken}` } : {}),
+    ...(resolvedWorkspace ? { "X-Workspace-Id": resolvedWorkspace } : {}),
+  };
 }
 
 function _authHeaders(token?: string): Record<string, string> {
