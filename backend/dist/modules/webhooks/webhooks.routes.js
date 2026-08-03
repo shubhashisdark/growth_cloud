@@ -47,7 +47,8 @@ webhooksRouter.post("/", requireAuth, requireWorkspaceMember(), async (req, res)
 // GET /api/v1/webhooks/:id
 webhooksRouter.get("/:id", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const item = await getSubscription(req.params.id, workspaceId);
+    const subId = req.params.id;
+    const item = await getSubscription(subId, workspaceId);
     if (!item) {
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Webhook subscription not found" }, meta: {} });
     }
@@ -60,8 +61,9 @@ webhooksRouter.get("/:id", requireAuth, requireWorkspaceMember(), async (req, re
 // PATCH /api/v1/webhooks/:id
 webhooksRouter.patch("/:id", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const subId = req.params.id;
     const payload = updateSchema.parse(req.body);
-    const updated = await updateSubscription(req.params.id, workspaceId, payload);
+    const updated = await updateSubscription(subId, workspaceId, payload);
     if (!updated) {
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Webhook subscription not found" }, meta: {} });
     }
@@ -74,7 +76,8 @@ webhooksRouter.patch("/:id", requireAuth, requireWorkspaceMember(), async (req, 
 // DELETE /api/v1/webhooks/:id
 webhooksRouter.delete("/:id", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const deleted = await deleteSubscription(req.params.id, workspaceId);
+    const subId = req.params.id;
+    const deleted = await deleteSubscription(subId, workspaceId);
     if (!deleted) {
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Webhook subscription not found" }, meta: {} });
     }
@@ -87,7 +90,8 @@ webhooksRouter.delete("/:id", requireAuth, requireWorkspaceMember(), async (req,
 // POST /api/v1/webhooks/:id/rotate-secret
 webhooksRouter.post("/:id/rotate-secret", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const updated = await rotateSubscriptionSecret(req.params.id, workspaceId);
+    const subId = req.params.id;
+    const updated = await rotateSubscriptionSecret(subId, workspaceId);
     if (!updated) {
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Webhook subscription not found" }, meta: {} });
     }
@@ -101,7 +105,8 @@ webhooksRouter.post("/:id/rotate-secret", requireAuth, requireWorkspaceMember(),
 webhooksRouter.get("/:id/deliveries", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(100, Number(req.query.limit ?? 20));
-    const result = await listDeliveryLogs(req.params.id, page, limit);
+    const subId = req.params.id;
+    const result = await listDeliveryLogs(subId, page, limit);
     res.json({
         data: result,
         meta: { timestamp: new Date().toISOString() },
@@ -111,7 +116,8 @@ webhooksRouter.get("/:id/deliveries", requireAuth, requireWorkspaceMember(), asy
 // POST /api/v1/webhooks/deliveries/:deliveryId/replay
 webhooksRouter.post("/deliveries/:deliveryId/replay", requireAuth, requireWorkspaceMember(), async (req, res) => {
     try {
-        const log = await replayDeliveryLog(req.params.deliveryId);
+        const deliveryId = req.params.deliveryId;
+        const log = await replayDeliveryLog(deliveryId);
         res.json({
             data: log,
             meta: { timestamp: new Date().toISOString() },

@@ -57,8 +57,9 @@ segmentsRouter.get("/", requireAuth, requireWorkspaceMember(), async (req, res) 
 // GET /api/v1/segments/:segmentId
 segmentsRouter.get("/:segmentId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const segmentId = req.params.segmentId;
     const segment = await prisma.segment.findFirst({
-        where: { id: req.params.segmentId, workspaceId },
+        where: { id: segmentId, workspaceId },
     });
     if (!segment)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Segment not found" }, meta: {} });
@@ -114,13 +115,14 @@ segmentsRouter.post("/", requireAuth, requireWorkspaceMember(), async (req, res)
 // PATCH /api/v1/segments/:segmentId
 segmentsRouter.patch("/:segmentId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const segmentId = req.params.segmentId;
     const payload = segmentUpdateSchema.parse(req.body);
-    const existing = await prisma.segment.findFirst({ where: { id: req.params.segmentId, workspaceId } });
+    const existing = await prisma.segment.findFirst({ where: { id: segmentId, workspaceId } });
     if (!existing)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Segment not found" }, meta: {} });
     const rules = payload.rules ?? JSON.parse(existing.rulesJson);
     const updated = await prisma.segment.update({
-        where: { id: req.params.segmentId },
+        where: { id: segmentId },
         data: {
             name: payload.name ?? existing.name,
             description: payload.description ?? existing.description,
@@ -148,10 +150,11 @@ segmentsRouter.patch("/:segmentId", requireAuth, requireWorkspaceMember(), async
 // DELETE /api/v1/segments/:segmentId
 segmentsRouter.delete("/:segmentId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const existing = await prisma.segment.findFirst({ where: { id: req.params.segmentId, workspaceId } });
+    const segmentId = req.params.segmentId;
+    const existing = await prisma.segment.findFirst({ where: { id: segmentId, workspaceId } });
     if (!existing)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Segment not found" }, meta: {} });
-    await prisma.segment.delete({ where: { id: req.params.segmentId } });
+    await prisma.segment.delete({ where: { id: segmentId } });
     res.json({ data: { deleted: true }, meta: { timestamp: new Date().toISOString() }, error: null });
 });
 // POST /api/v1/segments/preview — live audience count
@@ -179,9 +182,10 @@ segmentsRouter.post("/preview", requireAuth, requireWorkspaceMember(), async (re
 // GET /api/v1/segments/:segmentId/members
 segmentsRouter.get("/:segmentId/members", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const segmentId = req.params.segmentId;
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(100, Number(req.query.limit ?? 25));
-    const segment = await prisma.segment.findFirst({ where: { id: req.params.segmentId, workspaceId } });
+    const segment = await prisma.segment.findFirst({ where: { id: segmentId, workspaceId } });
     if (!segment)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Segment not found" }, meta: {} });
     if (segment.type === "dynamic") {
@@ -234,8 +238,9 @@ segmentsRouter.get("/:segmentId/members", requireAuth, requireWorkspaceMember(),
 // POST /api/v1/segments/:segmentId/members — add lead to static segment
 segmentsRouter.post("/:segmentId/members", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const segmentId = req.params.segmentId;
     const { leadId } = z.object({ leadId: z.string().min(1) }).parse(req.body);
-    const segment = await prisma.segment.findFirst({ where: { id: req.params.segmentId, workspaceId, type: "static" } });
+    const segment = await prisma.segment.findFirst({ where: { id: segmentId, workspaceId, type: "static" } });
     if (!segment)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Static segment not found" }, meta: {} });
     const lead = await prisma.lead.findFirst({ where: { id: leadId, workspaceId } });
@@ -253,11 +258,13 @@ segmentsRouter.post("/:segmentId/members", requireAuth, requireWorkspaceMember()
 // DELETE /api/v1/segments/:segmentId/members/:leadId
 segmentsRouter.delete("/:segmentId/members/:leadId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const segment = await prisma.segment.findFirst({ where: { id: req.params.segmentId, workspaceId } });
+    const segmentId = req.params.segmentId;
+    const leadId = req.params.leadId;
+    const segment = await prisma.segment.findFirst({ where: { id: segmentId, workspaceId } });
     if (!segment)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Segment not found" }, meta: {} });
     await prisma.segmentMembership.deleteMany({
-        where: { segmentId: segment.id, leadId: req.params.leadId },
+        where: { segmentId: segment.id, leadId },
     });
     const count = await prisma.segmentMembership.count({ where: { segmentId: segment.id } });
     await prisma.segment.update({ where: { id: segment.id }, data: { memberCount: count } });
@@ -266,7 +273,8 @@ segmentsRouter.delete("/:segmentId/members/:leadId", requireAuth, requireWorkspa
 // POST /api/v1/segments/:segmentId/compute — recompute dynamic segment membership
 segmentsRouter.post("/:segmentId/compute", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const segment = await prisma.segment.findFirst({ where: { id: req.params.segmentId, workspaceId, type: "dynamic" } });
+    const segmentId = req.params.segmentId;
+    const segment = await prisma.segment.findFirst({ where: { id: segmentId, workspaceId, type: "dynamic" } });
     if (!segment)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Dynamic segment not found" }, meta: {} });
     const rules = JSON.parse(segment.rulesJson);

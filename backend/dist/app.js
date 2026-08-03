@@ -3,6 +3,7 @@ import express from "express";
 import http from "node:http";
 import { ZodError } from "zod";
 import { getConfig } from "./config/env.js";
+import { aiRouter } from "./modules/ai/ai.routes.js";
 import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { apiKeysRouter } from "./modules/api-keys/api-keys.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
@@ -36,7 +37,7 @@ export function createApp() {
         response.json({
             data: {
                 name: "Growth Cloud Backend API",
-                modules: ["auth", "workspaces", "api-keys", "leads", "email", "segments", "workflows", "scoring", "webhooks", "sdk", "analytics"]
+                modules: ["auth", "workspaces", "api-keys", "leads", "email", "segments", "workflows", "scoring", "webhooks", "sdk", "analytics", "ai"]
             },
             meta: {
                 timestamp: new Date().toISOString()
@@ -55,6 +56,7 @@ export function createApp() {
     app.use("/api/v1/webhooks", webhooksRouter);
     app.use("/api/v1/sdk", sdkRouter);
     app.use("/api/v1/analytics", analyticsRouter);
+    app.use("/api/v1/ai", aiRouter);
     app.use((error, _request, response, _next) => {
         if (error instanceof ZodError) {
             return response.status(400).json({

@@ -27,7 +27,7 @@ async function req(method, path, body, auth = true) {
     return { status: r.status, json };
 }
 function log(category, test, pass, details = "") {
-    const icon = pass ? "✅" : "❌";
+    const icon = pass ? "" : "";
     console.log(`${icon} [${category}] ${test}${details ? " — " + details : ""}`);
     results.push({ category, test, pass, details });
 }
@@ -274,13 +274,13 @@ async function run() {
     console.log(`║  RESULTS: ${passed}/${total} passed  |  ${failed} failed`);
     console.log(`╚══════════════════════════════════════════════╝`);
     if (failed > 0) {
-        console.log("\n❌ FAILED TESTS:");
+        console.log("\n FAILED TESTS:");
         results.filter(r => !r.pass).forEach(r => console.log(`  [${r.category}] ${r.test} — ${r.details}`));
     }
     else {
-        console.log("\n🎉 ALL TESTS PASSED!");
+        console.log("\n ALL TESTS PASSED!");
     }
-    console.log("\n📦 Module Coverage:");
+    console.log("\n Module Coverage:");
     const categories = [...new Set(results.map(r => r.category))];
     categories.forEach(cat => {
         const catRes = results.filter(r => r.category === cat);

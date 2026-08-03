@@ -27,7 +27,7 @@ class InMemoryEmailQueue extends EventEmitter {
                 });
                 if (suppressed) {
                     if (job.jobId) {
-                        await prisma.emailJob.update({
+                        await prisma.emailJob.updateMany({
                             where: { id: job.jobId },
                             data: { status: "suppressed" },
                         }).catch(() => null);
@@ -42,7 +42,7 @@ class InMemoryEmailQueue extends EventEmitter {
                 });
                 // Update Job Record in Database
                 if (job.jobId) {
-                    await prisma.emailJob.update({
+                    await prisma.emailJob.updateMany({
                         where: { id: job.jobId },
                         data: {
                             status: "sent",
@@ -54,7 +54,7 @@ class InMemoryEmailQueue extends EventEmitter {
                 }
                 // Increment Campaign sent count
                 if (job.campaignId) {
-                    await prisma.emailCampaign.update({
+                    await prisma.emailCampaign.updateMany({
                         where: { id: job.campaignId },
                         data: { sentCount: { increment: 1 } },
                     }).catch(() => null);
@@ -62,7 +62,7 @@ class InMemoryEmailQueue extends EventEmitter {
             }
             catch (err) {
                 if (job.jobId) {
-                    await prisma.emailJob.update({
+                    await prisma.emailJob.updateMany({
                         where: { id: job.jobId },
                         data: { status: "failed" },
                     }).catch(() => null);

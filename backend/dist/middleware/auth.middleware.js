@@ -30,8 +30,16 @@ export function requireWorkspaceMember(allowedRoles) {
         const workspaceId = req.params.workspaceId ||
             req.query.workspaceId ||
             req.body?.workspaceId ||
+            req.headers["x-workspace-id"] ||
             req.params.id;
         if (!workspaceId) {
+            if (req.workspace?.workspaceId) {
+                req.workspace = {
+                    workspaceId: req.workspace.workspaceId,
+                    role: req.workspace.role
+                };
+                return next();
+            }
             return sendError(res, "BAD_REQUEST", "Workspace ID is required for workspace operations", 400);
         }
         const member = await prisma.workspaceMember.findUnique({

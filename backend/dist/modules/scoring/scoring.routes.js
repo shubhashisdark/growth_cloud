@@ -89,12 +89,13 @@ scoringRouter.post("/rules", requireAuth, requireWorkspaceMember(), async (req, 
 // PATCH /api/v1/scoring/rules/:ruleId
 scoringRouter.patch("/rules/:ruleId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const ruleId = req.params.ruleId;
     const payload = ruleUpdateSchema.parse(req.body);
-    const existing = await prisma.scoringRule.findFirst({ where: { id: req.params.ruleId, workspaceId } });
+    const existing = await prisma.scoringRule.findFirst({ where: { id: ruleId, workspaceId } });
     if (!existing)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Rule not found" }, meta: {} });
     const updated = await prisma.scoringRule.update({
-        where: { id: req.params.ruleId },
+        where: { id: ruleId },
         data: {
             name: payload.name ?? existing.name,
             description: payload.description ?? existing.description,
@@ -113,10 +114,11 @@ scoringRouter.patch("/rules/:ruleId", requireAuth, requireWorkspaceMember(), asy
 // DELETE /api/v1/scoring/rules/:ruleId
 scoringRouter.delete("/rules/:ruleId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const existing = await prisma.scoringRule.findFirst({ where: { id: req.params.ruleId, workspaceId } });
+    const ruleId = req.params.ruleId;
+    const existing = await prisma.scoringRule.findFirst({ where: { id: ruleId, workspaceId } });
     if (!existing)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Rule not found" }, meta: {} });
-    await prisma.scoringRule.delete({ where: { id: req.params.ruleId } });
+    await prisma.scoringRule.delete({ where: { id: ruleId } });
     res.json({ data: { deleted: true }, meta: { timestamp: new Date().toISOString() }, error: null });
 });
 // POST /api/v1/scoring/recalculate — full workspace recalculation
@@ -148,15 +150,16 @@ scoringRouter.post("/adjust", requireAuth, requireWorkspaceMember(), async (req,
 scoringRouter.get("/history/:leadId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(100, Number(req.query.limit ?? 50));
+    const leadId = req.params.leadId;
     const [history, total] = await Promise.all([
         prisma.scoreHistory.findMany({
-            where: { leadId: req.params.leadId },
+            where: { leadId },
             include: { rule: { select: { name: true, type: true } } },
             orderBy: { createdAt: "desc" },
             skip: (page - 1) * limit,
             take: limit,
         }),
-        prisma.scoreHistory.count({ where: { leadId: req.params.leadId } }),
+        prisma.scoreHistory.count({ where: { leadId } }),
     ]);
     res.json({
         data: {

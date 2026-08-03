@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../../data/prisma.js";
-import { createKeyMaterial, createSessionTokens, hashPassword, hashValue, slugify, verifyPassword } from "../../../lib/auth.js";
+import { createKeyMaterial, createSessionTokens, createVerificationTokenMaterial, hashPassword, hashValue, slugify, verifyPassword } from "../../../lib/auth.js";
 import { logAudit } from "../../../lib/audit.js";
 import { getConfig } from "../../../config/env.js";
-import { buildResetPasswordEmail, buildWelcomeEmail, sendEmailWithFallback } from "../../email/email.service.js";
+import { buildResetPasswordEmail, buildVerificationEmail, sendEmailWithFallback } from "../../email/email.service.js";
 import { UserRepository } from "../repositories/user.repository.js";
 export class AuthService {
     userRepository;
@@ -28,7 +28,7 @@ export class AuthService {
                 email: normalizedEmail,
                 passwordHash: await hashPassword(input.password),
                 status: "active",
-                emailVerifiedAt: new Date(),
+                // emailVerifiedAt is intentionally NOT set — user must verify via email link
             },
         });
         await prisma.workspace.create({
@@ -62,9 +62,22 @@ export class AuthService {
                 scopesJson: JSON.stringify(["auth:read", "workspaces:read", "workspaces:write", "users:write"]),
             },
         });
+        // Create email verification token and send verification link
+        const verification = createVerificationTokenMaterial("email_verification");
+        await prisma.verificationToken.create({
+            data: {
+                id: `vfy_${randomUUID().slice(0, 8)}`,
+                userId,
+                tokenHash: verification.tokenHash,
+                type: "email_verification",
+                expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24), // 24 hours
+            },
+        });
         await logAudit("auth.signup", "User", userId, workspaceId, userId, { email: normalizedEmail });
-        const welcomeEmail = buildWelcomeEmail(input.name, input.workspaceName);
-        await sendEmailWithFallback({ to: normalizedEmail, ...welcomeEmail });
+        const baseUrl = getConfig().appBaseUrl || "http://localhost:3000";
+        const verifyUrl = `${baseUrl}/verify-email?token=${verification.plaintextToken}`;
+        const verificationEmail = buildVerificationEmail(input.name, verifyUrl);
+        await sendEmailWithFallback({ to: normalizedEmail, ...verificationEmail });
         return {
             status: 201,
             data: {
@@ -159,8 +172,10 @@ export class AuthService {
                 expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
             },
         });
-        const welcomeEmail = buildWelcomeEmail(user.name, "Growth Cloud");
-        await sendEmailWithFallback({ to: user.email, ...welcomeEmail });
+        const baseUrl = getConfig().appBaseUrl || "http://localhost:3000";
+        const verifyUrl = `${baseUrl}/verify-email?token=${verification.plaintextToken}`;
+        const verificationEmail = buildVerificationEmail(user.name, verifyUrl);
+        await sendEmailWithFallback({ to: user.email, ...verificationEmail });
         return { status: 200, data: { email: user.email, delivered: true, verificationToken: getConfig().exposeResetTokenInResponse ? verification.plaintextToken : null, message: "Verification email sent" } };
     }
     async forgotPassword(email) {

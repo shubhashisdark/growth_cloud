@@ -221,6 +221,25 @@ export function buildWelcomeEmail(name, workspaceName) {
         text: htmlToText(html)
     };
 }
+export function buildVerificationEmail(name, verifyUrl) {
+    const subject = "Verify your Growth Cloud email address";
+    const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
+      <h1>Verify your email address</h1>
+      <p>Hi ${name},</p>
+      <p>Thanks for signing up for Growth Cloud. Please verify your email address by clicking the link below:</p>
+      <p><a href="${verifyUrl}" style="display:inline-block;padding:12px 24px;background:#38BDF8;color:#0B0F1A;text-decoration:none;border-radius:8px;font-weight:bold;">Verify Email Address</a></p>
+      <p>Or copy and paste this link into your browser:</p>
+      <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+      <p>This link expires in 24 hours. If you did not create an account, you can safely ignore this email.</p>
+    </div>
+  `;
+    return {
+        subject,
+        html,
+        text: htmlToText(html)
+    };
+}
 export function buildResetPasswordEmail(name, resetUrl) {
     const subject = "Reset your Growth Cloud password";
     const html = `

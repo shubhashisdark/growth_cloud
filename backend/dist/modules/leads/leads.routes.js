@@ -72,7 +72,20 @@ leadsRouter.post("/bulk", requireAuth, requireWorkspaceMember(), async (request,
 });
 // CSV Import
 leadsRouter.post("/import", requireAuth, requireWorkspaceMember(), async (request, response) => {
-    const body = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
+    let body = "";
+    if (typeof request.body === "string") {
+        body = request.body;
+    }
+    else if (request.body && typeof request.body === "object") {
+        body = typeof request.body.csvText === "string"
+            ? request.body.csvText ?? ""
+            : typeof request.body.body === "string"
+                ? request.body.body ?? ""
+                : "";
+    }
+    if (!body.trim()) {
+        return sendError(response, "VALIDATION_ERROR", "CSV import requires raw text body", 400);
+    }
     const result = await leadsService.importLeads(body, request.workspace.workspaceId);
     return sendSuccess(response, result, { imported: result.imported });
 });

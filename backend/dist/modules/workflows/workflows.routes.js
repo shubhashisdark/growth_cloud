@@ -62,8 +62,9 @@ workflowsRouter.get("/", requireAuth, requireWorkspaceMember(), async (req, res)
 // GET /api/v1/workflows/:workflowId
 workflowsRouter.get("/:workflowId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const workflowId = req.params.workflowId;
     const wf = await prisma.workflow.findFirst({
-        where: { id: req.params.workflowId, workspaceId },
+        where: { id: workflowId, workspaceId },
     });
     if (!wf)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Workflow not found" }, meta: {} });
@@ -125,12 +126,13 @@ workflowsRouter.post("/", requireAuth, requireWorkspaceMember(), async (req, res
 // PATCH /api/v1/workflows/:workflowId
 workflowsRouter.patch("/:workflowId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const workflowId = req.params.workflowId;
     const payload = workflowUpdateSchema.parse(req.body);
-    const existing = await prisma.workflow.findFirst({ where: { id: req.params.workflowId, workspaceId } });
+    const existing = await prisma.workflow.findFirst({ where: { id: workflowId, workspaceId } });
     if (!existing)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Workflow not found" }, meta: {} });
     const updated = await prisma.workflow.update({
-        where: { id: req.params.workflowId },
+        where: { id: workflowId },
         data: {
             name: payload.name ?? existing.name,
             description: payload.description ?? existing.description,
@@ -156,28 +158,30 @@ workflowsRouter.patch("/:workflowId", requireAuth, requireWorkspaceMember(), asy
 // DELETE /api/v1/workflows/:workflowId
 workflowsRouter.delete("/:workflowId", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
-    const existing = await prisma.workflow.findFirst({ where: { id: req.params.workflowId, workspaceId } });
+    const workflowId = req.params.workflowId;
+    const existing = await prisma.workflow.findFirst({ where: { id: workflowId, workspaceId } });
     if (!existing)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Workflow not found" }, meta: {} });
-    await prisma.workflow.delete({ where: { id: req.params.workflowId } });
+    await prisma.workflow.delete({ where: { id: workflowId } });
     res.json({ data: { deleted: true }, meta: { timestamp: new Date().toISOString() }, error: null });
 });
 // GET /api/v1/workflows/:workflowId/runs
 workflowsRouter.get("/:workflowId/runs", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const workflowId = req.params.workflowId;
     const page = Math.max(1, Number(req.query.page ?? 1));
     const limit = Math.min(50, Number(req.query.limit ?? 20));
-    const wf = await prisma.workflow.findFirst({ where: { id: req.params.workflowId, workspaceId } });
+    const wf = await prisma.workflow.findFirst({ where: { id: workflowId, workspaceId } });
     if (!wf)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Workflow not found" }, meta: {} });
     const [runs, total] = await Promise.all([
         prisma.workflowRun.findMany({
-            where: { workflowId: req.params.workflowId },
+            where: { workflowId },
             orderBy: { startedAt: "desc" },
             skip: (page - 1) * limit,
             take: limit,
         }),
-        prisma.workflowRun.count({ where: { workflowId: req.params.workflowId } }),
+        prisma.workflowRun.count({ where: { workflowId } }),
     ]);
     res.json({
         data: {
@@ -199,13 +203,16 @@ workflowsRouter.get("/:workflowId/runs", requireAuth, requireWorkspaceMember(), 
 });
 // GET /api/v1/workflows/:workflowId/runs/:runId
 workflowsRouter.get("/:workflowId/runs/:runId", requireAuth, requireWorkspaceMember(), async (req, res) => {
+    const workflowId = req.params.workflowId;
+    const runId = req.params.runId;
     const run = await prisma.workflowRun.findUnique({
-        where: { id: req.params.runId },
+        where: { id: runId },
         include: { stepLogs: { orderBy: { stepIndex: "asc" } } },
     });
-    if (!run || run.workflowId !== req.params.workflowId) {
+    if (!run || run.workflowId !== workflowId) {
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Run not found" }, meta: {} });
     }
+    const stepLogsArr = run.stepLogs;
     res.json({
         data: {
             id: run.id,
@@ -216,14 +223,14 @@ workflowsRouter.get("/:workflowId/runs/:runId", requireAuth, requireWorkspaceMem
             errorMessage: run.errorMessage,
             startedAt: run.startedAt,
             finishedAt: run.finishedAt,
-            durationMs: run.finishedAt ? run.finishedAt.getTime() - run.startedAt.getTime() : null,
-            stepLogs: run.stepLogs.map((s) => ({
+            durationMs: run.finishedAt ? run.finishedAt.getTime() - r_startedAt_ms(run) : null,
+            stepLogs: (stepLogsArr || []).map((s) => ({
                 id: s.id,
                 stepIndex: s.stepIndex,
                 stepType: s.stepType,
                 status: s.status,
-                input: JSON.parse(s.inputJson),
-                output: JSON.parse(s.outputJson),
+                input: JSON.parse(s.inputJson || "{}"),
+                output: JSON.parse(s.outputJson || "{}"),
                 errorMessage: s.errorMessage,
                 durationMs: s.durationMs,
                 createdAt: s.createdAt,
@@ -233,11 +240,15 @@ workflowsRouter.get("/:workflowId/runs/:runId", requireAuth, requireWorkspaceMem
         error: null,
     });
 });
+function r_startedAt_ms(run) {
+    return run.startedAt ? run.startedAt.getTime() : Date.now();
+}
 // POST /api/v1/workflows/:workflowId/trigger
 workflowsRouter.post("/:workflowId/trigger", requireAuth, requireWorkspaceMember(), async (req, res) => {
     const workspaceId = req.workspace.workspaceId;
+    const workflowId = req.params.workflowId;
     const payload = triggerSchema.parse(req.body);
-    const wf = await prisma.workflow.findFirst({ where: { id: req.params.workflowId, workspaceId } });
+    const wf = await prisma.workflow.findFirst({ where: { id: workflowId, workspaceId } });
     if (!wf)
         return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Workflow not found" }, meta: {} });
     const result = await executeWorkflow(wf.id, payload.leadId ?? null, "manual_trigger", payload.input ?? {});
