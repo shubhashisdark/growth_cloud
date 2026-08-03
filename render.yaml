@@ -1,11 +1,66 @@
+# Growth Cloud — Render Blueprint
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Creates:
+# 1) PostgreSQL database
+# 2) Express API (backend/)
+# 3) Next.js frontend (repo root)
+#
+# After first deploy, set cross-service URLs (see comments below).
+
+databases:
+  - name: growth-cloud-db
+    plan: free
+    databaseName: growthcloud
+    user: growthcloud
+
 services:
+  # ── Backend API ─────────────────────────────────────────────
   - type: web
-    name: growth-cloud-backend
-    env: node
+    name: growth-cloud-api
+    runtime: node
+    plan: free
     rootDir: backend
-    buildCommand: npm run build
-    startCommand: npm run dev
-    plan: starter
+    buildCommand: npm install && npm run build && npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: growth-cloud-db
+          property: connectionString
+      - key: AUTH_TOKEN_SECRET
+        generateValue: true
+      # Frontend public URL (update after frontend gets its .onrender.com URL)
+      - key: APP_BASE_URL
+        sync: false
+      # Must match the frontend origin exactly, e.g. https://growth-cloud-web.onrender.com
+      - key: CORS_ORIGIN
+        sync: false
+      # Optional email (invites / password reset). Leave unset to skip sending.
+      - key: EMAIL_PROVIDER
+        value: console
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+
+  # ── Next.js frontend ────────────────────────────────────────
+  - type: web
+    name: growth-cloud-web
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Backend public URL, e.g. https://growth-cloud-api.onrender.com
+      # Must be set BEFORE/at build time (NEXT_PUBLIC_* is baked into the client).
+      - key: NEXT_PUBLIC_BACKEND_URL
+        sync: false

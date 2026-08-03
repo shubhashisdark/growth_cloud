@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build --prefix backend && tsc -p tsconfig.json",
+    "build": "next build",
     "start": "next start",
+    "build:backend": "npm run build --prefix backend",
     "test": "npm test --prefix backend"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
