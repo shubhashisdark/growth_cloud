@@ -1,0 +1,28 @@
+{
+  "name": "@growthcloud/sdk",
+  "version": "1.0.0",
+  "description": "Production JavaScript/TypeScript SDK for Growth Cloud marketing automation",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test dist/index.test.js"
+  },
+  "keywords": [
+    "growth-cloud",
+    "marketing-automation",
+    "analytics",
+    "lead-tracking",
+    "webhooks",
+    "sdk"
+  ],
+  "author": "Growth Cloud Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
