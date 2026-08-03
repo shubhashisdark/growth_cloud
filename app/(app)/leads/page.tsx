@@ -50,7 +50,6 @@ import {
   CheckSquare,
 } from "lucide-react";
 import { useLeads, type LeadListParams } from "@/hooks/useLeads";
-import { useAuthSessionStore } from "@/lib/stores/auth-session";
 import type { Lead, LeadStage } from "@/lib/backend";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -260,9 +259,7 @@ function ImportCsvButton() {
   const [open, setOpen] = React.useState(false);
   const [result, setResult] = React.useState<{ imported: number; errors: string[] } | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
-  const session = useAuthSessionStore((state) => state.session);
-  const workspaceId = session?.workspaceId ?? session?.user?.memberships?.[0]?.workspaceId ?? "";
-  const { importCsvMutation } = useLeads(workspaceId);
+  const { importCsvMutation } = useLeads();
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

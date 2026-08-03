@@ -8,7 +8,7 @@ import { CheckCircle2, LockKeyhole, ShieldCheck, Zap } from "lucide-react";
 import { AuthPageShell } from "@/components/auth-page-shell";
 import { Input } from "@/components/ui/input";
 import { login, parseFrontendError } from "@/lib/backend";
-import type { AuthSession } from "@/lib/stores/auth-session";
+import { toAuthSession } from "@/lib/stores/auth-session";
 import { useAuthSessionStore } from "@/lib/stores/auth-session";
 
 const trustPoints = [
@@ -16,13 +16,6 @@ const trustPoints = [
   "Secure workspace access with role-aware authentication flows",
   "Built for company teams, not a consumer-style login screen",
 ];
-
-function buildLoginSession(session: AuthSession): AuthSession {
-  return {
-    ...session,
-    workspaceId: session.workspaceId ?? session.user.memberships?.[0]?.workspaceId ?? "",
-  };
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,7 +34,7 @@ export default function LoginPage() {
 
     try {
       const response = await login({ email, password });
-      setSession(buildLoginSession(response.data));
+      setSession(toAuthSession(response.data));
       setMessage("Login successful. Redirecting to dashboard...");
       router.replace("/dashboard");
     } catch (error) {

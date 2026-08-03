@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthSessionStore } from "@/lib/stores/auth-session";
+import { useAuthSessionStore, toAuthSession } from "@/lib/stores/auth-session";
 import { getMe, logout, login, signup, forgotPassword, resetPassword, resendVerification, verifyEmail, acceptInvitation } from "@/lib/backend";
 
 export function useAuth() {
@@ -35,7 +35,7 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: login,
     onSuccess: (res) => {
-      setSession(res.data);
+      setSession(toAuthSession(res.data));
       queryClient.invalidateQueries({ queryKey: ["auth"] });
     },
   });

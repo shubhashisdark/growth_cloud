@@ -10,7 +10,7 @@
     "test": "npm test --prefix backend"
   },
   "engines": {
-    "node": ">=18"
+    "node": "20.x"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

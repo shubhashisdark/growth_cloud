@@ -23,6 +23,20 @@ export interface AuthSession {
   user: AuthUser;
 }
 
+export function toAuthSession(payload: {
+  accessToken: string;
+  refreshToken: string;
+  workspaceId?: string;
+  user: AuthUser;
+}): AuthSession {
+  return {
+    accessToken: payload.accessToken,
+    refreshToken: payload.refreshToken,
+    workspaceId: payload.workspaceId ?? payload.user.memberships?.[0]?.workspaceId ?? "",
+    user: payload.user,
+  };
+}
+
 export interface AuthSessionState {
   session: AuthSession | null;
   hydrated: boolean;
