@@ -98,7 +98,8 @@ export class AuthService {
   }
 
   async login(input: { email: string; password: string }) {
-    const user = await prisma.user.findUnique({ where: { email: input.email }, include: { memberships: true } });
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail }, include: { memberships: true } });
     if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
       return { error: { code: "INVALID_CREDENTIALS", message: "Invalid email or password" }, status: 401 };
     }
@@ -241,6 +242,11 @@ export class AuthService {
       select: { id: true, name: true, email: true },
     });
     await prisma.passwordResetToken.update({ where: { tokenHash }, data: { usedAt: new Date() } });
+    // Invalidate existing sessions so the new password is required everywhere
+    await prisma.session.updateMany({
+      where: { userId: resetToken.userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
     await logAudit("auth.password_reset", "User", resetToken.userId, null, resetToken.userId);
     return { status: 200, data: { reset: true, user } };
   }

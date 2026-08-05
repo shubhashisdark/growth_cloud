@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { CheckCircle2, UserPlus } from "lucide-react";
 import { AuthPageShell } from "@/components/auth-page-shell";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { parseFrontendError } from "@/lib/backend";
@@ -85,10 +86,10 @@ export default function AcceptInvitationPage() {
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-[#E2E8F0]">Choose password</label>
-            <Input
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              type="password"
+              autoComplete="new-password"
               placeholder="At least 8 characters"
               required
               minLength={8}

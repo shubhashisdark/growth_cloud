@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthPageShell } from "@/components/auth-page-shell";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { signup, parseFrontendError } from "@/lib/backend";
 
 const checklist = [
@@ -92,10 +93,9 @@ export default function SignupPage() {
       </div>
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-[#E2E8F0]">Password</label>
-        <Input
+        <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          type="password"
           autoComplete="new-password"
           placeholder="At least 8 characters"
           required

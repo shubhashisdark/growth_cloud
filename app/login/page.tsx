@@ -7,6 +7,7 @@ import { CheckCircle2, LockKeyhole, ShieldCheck, Zap } from "lucide-react";
 
 import { AuthPageShell } from "@/components/auth-page-shell";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { login, parseFrontendError } from "@/lib/backend";
 import { toAuthSession } from "@/lib/stores/auth-session";
 import { useAuthSessionStore } from "@/lib/stores/auth-session";
@@ -82,10 +83,9 @@ export default function LoginPage() {
       </div>
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-[#E2E8F0]">Password</label>
-        <Input
+        <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          type="password"
           autoComplete="current-password"
           placeholder="••••••••"
           required

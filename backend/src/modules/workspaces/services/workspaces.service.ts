@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../../data/prisma.js";
-import { createVerificationTokenMaterial, slugify } from "../../../lib/auth.js";
+import { createVerificationTokenMaterial, hashPassword, slugify } from "../../../lib/auth.js";
 import { logAudit } from "../../../lib/audit.js";
 import { getConfig } from "../../../config/env.js";
 import { buildInvitationEmail, sendEmailWithFallback } from "../../email/email.service.js";
@@ -150,12 +150,13 @@ export class WorkspacesService {
 
     if (!existingUser) {
       userId = `usr_${randomUUID().slice(0, 8)}`;
+      // Unusable random hash — user must accept invite or reset password before login works
       await prisma.user.create({
         data: {
           id: userId,
           name: input.name,
           email: input.email.trim().toLowerCase(),
-          passwordHash: "invited-user",
+          passwordHash: await hashPassword(`pending_${randomUUID()}`),
           status: "pending_verification",
         },
       });

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle2, Lock } from "lucide-react";
 import { AuthPageShell } from "@/components/auth-page-shell";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { parseFrontendError } from "@/lib/backend";
@@ -83,10 +83,10 @@ export default function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-[#E2E8F0]">New password</label>
-            <Input
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              type="password"
+              autoComplete="new-password"
               placeholder="At least 8 characters"
               required
               minLength={8}
@@ -96,10 +96,10 @@ export default function ResetPasswordPage() {
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-[#E2E8F0]">Confirm new password</label>
-            <Input
+            <PasswordInput
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              type="password"
+              autoComplete="new-password"
               placeholder="Re-enter new password"
               required
               minLength={8}

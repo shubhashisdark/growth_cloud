@@ -2,18 +2,18 @@ import { z } from "zod";
 
 export const signupSchema = z.object({
   name: z.string().trim().min(2),
-  email: z.string().trim().email(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string().min(8),
   workspaceName: z.string().trim().min(2),
 });
 
 export const loginSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
   password: z.string().min(8),
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
 });
 
 export const resetPasswordSchema = z.object({
@@ -36,6 +36,6 @@ export const inviteAcceptSchema = z.object({
 });
 
 export const resendVerificationSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().email().transform((value) => value.toLowerCase()),
 });
 
