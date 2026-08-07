@@ -32,13 +32,34 @@ describe("email.service", () => {
 
   it("creates tracking urls containing message and event identifiers", () => {
     const tracking = emailService.buildTrackingUrls({
-      baseUrl: "https://app.example.com",
+      baseUrl: "https://api.example.com",
       campaignId: "cmp_1",
       messageId: "msg_1",
-      recipientId: "rct_1"
+      recipientId: "rct_1",
+      recipientEmail: "maya@example.com",
     });
 
-    assert.equal(tracking.openPixelUrl, "https://app.example.com/api/v1/tracking/open?campaignId=cmp_1&messageId=msg_1&recipientId=rct_1");
-    assert.equal(tracking.clickRedirectUrl, "https://app.example.com/api/v1/tracking/click?campaignId=cmp_1&messageId=msg_1&recipientId=rct_1");
+    assert.equal(
+      tracking.openPixelUrl,
+      "https://api.example.com/api/v1/email/tracking/open?campaignId=cmp_1&messageId=msg_1&recipientId=rct_1&recipientEmail=maya%40example.com",
+    );
+    assert.equal(
+      tracking.clickRedirectUrl,
+      "https://api.example.com/api/v1/email/tracking/click?campaignId=cmp_1&messageId=msg_1&recipientId=rct_1&recipientEmail=maya%40example.com",
+    );
+  });
+
+  it("wraps http links with click tracking and skips mailto/unsubscribe", () => {
+    const clickBase =
+      "https://api.example.com/api/v1/email/tracking/click?campaignId=cmp_1&messageId=msg_1&recipientId=lead_1";
+    const html = `
+      <a href="https://ecommerce1-gold.vercel.app/">Visit Website</a>
+      <a href="mailto:help@example.com">Email us</a>
+      <a href="https://api.example.com/api/v1/email/tracking/unsubscribe?email=a@b.com">Unsubscribe</a>
+    `;
+    const wrapped = emailService.wrapHtmlLinksForClickTracking(html, clickBase);
+    assert.match(wrapped, /tracking\/click\?.*url=https%3A%2F%2Fecommerce1-gold\.vercel\.app%2F/);
+    assert.match(wrapped, /href="mailto:help@example.com"/);
+    assert.match(wrapped, /tracking\/unsubscribe\?email=a@b.com/);
   });
 });

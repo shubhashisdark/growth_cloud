@@ -8,7 +8,7 @@ import { aiRouter } from "./modules/ai/ai.routes.js";
 import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { apiKeysRouter } from "./modules/api-keys/api-keys.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
-import { emailRouter } from "./modules/email/email.routes.js";
+import { emailRouter, trackingAliasRouter } from "./modules/email/email.routes.js";
 import { leadsRouter } from "./modules/leads/leads.routes.js";
 import { segmentsRouter } from "./modules/segments/segments.routes.js";
 import { scoringRouter } from "./modules/scoring/scoring.routes.js";
@@ -57,6 +57,7 @@ export function createApp() {
   app.use("/api/v1/api-keys", apiKeysRouter);
   app.use("/api/v1/leads", leadsRouter);
   app.use("/api/v1/email", emailRouter);
+  app.use("/api/v1/tracking", trackingAliasRouter);
   app.use("/api/v1/segments", segmentsRouter);
   app.use("/api/v1/scoring", scoringRouter);
   app.use("/api/v1/workflows", workflowsRouter);

@@ -5,6 +5,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export interface AuthMembership {
   workspaceId: string;
+  workspaceName?: string;
   role: string;
 }
 
@@ -13,6 +14,7 @@ export interface AuthUser {
   name: string;
   email: string;
   status?: string;
+  emailVerifiedAt?: string | null;
   memberships?: AuthMembership[];
 }
 

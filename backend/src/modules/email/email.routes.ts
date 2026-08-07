@@ -39,19 +39,20 @@ const suppressionSchema = z.object({
 });
 
 export const emailRouter = Router();
+export const trackingAliasRouter = Router();
 
 // ─────────────────────────────────────────────
 // PUBLIC TRACKING ENDPOINTS (No auth required)
 // ─────────────────────────────────────────────
 
-// Open Tracking Pixel
-emailRouter.get("/tracking/open", async (request, response) => {
+async function handleOpenTracking(request: import("express").Request, response: import("express").Response) {
   const campaignId = String(request.query.campaignId || "");
   const messageId = String(request.query.messageId || "");
-  const recipient = String(request.query.recipientId || "");
+  const recipientId = String(request.query.recipientId || "");
+  const recipientEmail = String(request.query.recipientEmail || "");
 
   if (campaignId) {
-    await service.recordOpenEvent(campaignId, messageId, recipient);
+    await service.recordOpenEvent(campaignId, messageId, recipientId, recipientEmail);
   }
 
   // 1x1 transparent GIF image
@@ -62,21 +63,29 @@ emailRouter.get("/tracking/open", async (request, response) => {
   response.setHeader("Content-Type", "image/gif");
   response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
   response.send(pixel);
-});
+}
 
-// Click Tracking Redirect
-emailRouter.get("/tracking/click", async (request, response) => {
+async function handleClickTracking(request: import("express").Request, response: import("express").Response) {
   const campaignId = String(request.query.campaignId || "");
   const messageId = String(request.query.messageId || "");
-  const recipient = String(request.query.recipientId || "");
+  const recipientId = String(request.query.recipientId || "");
+  const recipientEmail = String(request.query.recipientEmail || "");
   const targetUrl = String(request.query.url || "/");
 
   if (campaignId) {
-    await service.recordClickEvent(campaignId, messageId, recipient, targetUrl);
+    await service.recordClickEvent(campaignId, messageId, recipientId, targetUrl, recipientEmail);
   }
 
   return response.redirect(302, targetUrl);
-});
+}
+
+// Canonical paths: /api/v1/email/tracking/*
+emailRouter.get("/tracking/open", handleOpenTracking);
+emailRouter.get("/tracking/click", handleClickTracking);
+
+// Legacy alias: /api/v1/tracking/*
+trackingAliasRouter.get("/open", handleOpenTracking);
+trackingAliasRouter.get("/click", handleClickTracking);
 
 // Unsubscribe Link
 emailRouter.get("/tracking/unsubscribe", async (request, response) => {
@@ -203,9 +212,18 @@ emailRouter.post(
   requireWorkspaceMember(["super_admin", "admin", "marketer"]),
   async (request, response) => {
     const campaignId = String(request.params.id);
-    const result = await service.sendCampaign(campaignId, request.workspace!.workspaceId);
-    if (!result) return sendError(response, "NOT_FOUND", "Campaign not found", 404);
-    return sendSuccess(response, result);
+    try {
+      const result = await service.sendCampaign(campaignId, request.workspace!.workspaceId);
+      if (!result) return sendError(response, "NOT_FOUND", "Campaign not found", 404);
+      return sendSuccess(response, result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to send campaign";
+      const statusCode =
+        error instanceof Error && "statusCode" in error && typeof (error as { statusCode?: unknown }).statusCode === "number"
+          ? (error as { statusCode: number }).statusCode
+          : 500;
+      return sendError(response, statusCode === 400 ? "NO_RECIPIENTS" : "SEND_FAILED", message, statusCode);
+    }
   },
 );
 

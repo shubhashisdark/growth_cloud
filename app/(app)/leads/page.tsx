@@ -42,7 +42,6 @@ import {
   Download,
   Archive,
   RotateCcw,
-  Trash2,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -50,7 +49,7 @@ import {
   CheckSquare,
 } from "lucide-react";
 import { useLeads, type LeadListParams } from "@/hooks/useLeads";
-import type { Lead, LeadStage } from "@/lib/backend";
+import type { Lead, LeadStage, LeadStatus } from "@/lib/backend";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -335,6 +334,7 @@ function ImportCsvButton() {
 
 export default function LeadsPage() {
   const [params, setParams] = React.useState<LeadListParams>({
+    status: "active",
     sortBy: "createdAt",
     sortOrder: "desc",
     page: 1,
@@ -345,11 +345,19 @@ export default function LeadsPage() {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [bulkStage, setBulkStage] = React.useState<LeadStage>("mql");
 
+  const statusFilter = params.status ?? "active";
+  const viewingArchived = statusFilter === "archived";
+
   const hook = useLeads(params);
   const { items, meta, isLoading, error, bulkActionMutation, deleteLeadMutation, exportCsv } = hook;
 
   function updateParam<K extends keyof LeadListParams>(key: K, value: LeadListParams[K]) {
     setParams((prev) => ({ ...prev, [key]: value, page: key !== "page" ? 1 : (value as number) }));
+  }
+
+  function setStatus(status: LeadStatus) {
+    setSelectedIds(new Set());
+    updateParam("status", status);
   }
 
   function setStage(stage: "all" | LeadStage) {
@@ -424,9 +432,58 @@ export default function LeadsPage() {
           </div>
         )}
 
+        {/* Active / Archived status switch */}
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div
+            role="tablist"
+            aria-label="Lead status"
+            className="inline-flex rounded-xl border border-white/[0.08] bg-[#0B0F1A] p-1"
+          >
+            <button
+              role="tab"
+              aria-selected={!viewingArchived}
+              onClick={() => setStatus("active")}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                !viewingArchived
+                  ? "bg-[#1A1F2E] text-[#F1F5F9] shadow-sm"
+                  : "text-[#64748B] hover:text-[#F1F5F9]",
+              )}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Active
+            </button>
+            <button
+              role="tab"
+              aria-selected={viewingArchived}
+              onClick={() => setStatus("archived")}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                viewingArchived
+                  ? "bg-[#1A1F2E] text-[#F1F5F9] shadow-sm"
+                  : "text-[#64748B] hover:text-[#F1F5F9]",
+              )}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              Archived
+            </button>
+          </div>
+
+          <p className="text-xs text-[#64748B]">
+            {viewingArchived
+              ? "Archived leads are hidden from campaigns until restored."
+              : "Showing live leads available for scoring, campaigns, and workflows."}
+          </p>
+        </div>
+
         {/* Stats */}
         <div className="flex gap-4 mb-6">
-          <StatCard label="Total Leads" value={total.toLocaleString()} color="#F1F5F9" delay={0} />
+          <StatCard
+            label={viewingArchived ? "Archived Leads" : "Active Leads"}
+            value={total.toLocaleString()}
+            color="#F1F5F9"
+            delay={0}
+          />
           <StatCard label="MQLs" value={mqls.toLocaleString()} color="#A78BFA" delay={0.07} />
           <StatCard label="SQLs" value={sqls.toLocaleString()} color="#34D399" delay={0.14} />
           <StatCard label="Customers" value={customers.toLocaleString()} color="#FBBF24" delay={0.21} />
@@ -475,6 +532,18 @@ export default function LeadsPage() {
             </PopoverTrigger>
             <PopoverContent className="w-72 bg-[#1A1F2E] border-white/[0.08] p-4 space-y-4">
               <div>
+                <label className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1.5 block">Status</label>
+                <Select value={statusFilter} onValueChange={(v) => setStatus(v as LeadStatus)}>
+                  <SelectTrigger className="bg-[#0B0F1A] border-white/[0.08] text-[#F1F5F9] h-9 rounded-lg text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1A1F2E] border-white/[0.08]">
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="text-xs text-[#64748B] font-semibold uppercase tracking-wider mb-1.5 block">Source</label>
                 <Select value={params.source ?? "all"} onValueChange={(v) => updateParam("source", v === "all" ? undefined : v)}>
                   <SelectTrigger className="bg-[#0B0F1A] border-white/[0.08] text-[#F1F5F9] h-9 rounded-lg text-sm">
@@ -515,28 +584,37 @@ export default function LeadsPage() {
             <span className="text-sm text-sky-300 font-semibold">{selectedIds.size} selected</span>
             <div className="flex-1" />
 
-            <Select value={bulkStage} onValueChange={(v) => setBulkStage(v as LeadStage)}>
-              <SelectTrigger className="h-8 bg-[#0B0F1A] border-sky-500/20 text-[#F1F5F9] text-xs rounded-lg w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-[#1A1F2E] border-white/[0.08]">
-                <SelectItem value="lead">Lead</SelectItem>
-                <SelectItem value="mql">MQL</SelectItem>
-                <SelectItem value="sql">SQL</SelectItem>
-                <SelectItem value="customer">Customer</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={() => handleBulkAction("advance_stage")} disabled={bulkActionMutation.isPending} className="h-8 px-3 text-xs bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold rounded-lg">
-              <RotateCcw className="w-3 h-3 mr-1" />
-              Advance Stage
-            </Button>
-            <Button onClick={() => handleBulkAction("archive")} disabled={bulkActionMutation.isPending} variant="outline" className="h-8 px-3 text-xs border-white/[0.12] text-[#94A3B8] bg-transparent hover:bg-amber-500/10 hover:text-amber-300 rounded-lg">
-              <Archive className="w-3 h-3 mr-1" />
-              Archive
-            </Button>
-            <Button onClick={() => handleBulkAction("activate")} disabled={bulkActionMutation.isPending} variant="outline" className="h-8 px-3 text-xs border-white/[0.12] text-[#94A3B8] bg-transparent hover:bg-emerald-500/10 hover:text-emerald-300 rounded-lg">
-              Activate
-            </Button>
+            {!viewingArchived && (
+              <>
+                <Select value={bulkStage} onValueChange={(v) => setBulkStage(v as LeadStage)}>
+                  <SelectTrigger className="h-8 bg-[#0B0F1A] border-sky-500/20 text-[#F1F5F9] text-xs rounded-lg w-36">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1A1F2E] border-white/[0.08]">
+                    <SelectItem value="lead">Lead</SelectItem>
+                    <SelectItem value="mql">MQL</SelectItem>
+                    <SelectItem value="sql">SQL</SelectItem>
+                    <SelectItem value="customer">Customer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={() => handleBulkAction("advance_stage")} disabled={bulkActionMutation.isPending} className="h-8 px-3 text-xs bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold rounded-lg">
+                  <RotateCcw className="w-3 h-3 mr-1" />
+                  Advance Stage
+                </Button>
+                <Button onClick={() => handleBulkAction("archive")} disabled={bulkActionMutation.isPending} variant="outline" className="h-8 px-3 text-xs border-white/[0.12] text-[#94A3B8] bg-transparent hover:bg-amber-500/10 hover:text-amber-300 rounded-lg">
+                  <Archive className="w-3 h-3 mr-1" />
+                  Archive
+                </Button>
+              </>
+            )}
+
+            {viewingArchived && (
+              <Button onClick={() => handleBulkAction("activate")} disabled={bulkActionMutation.isPending} className="h-8 px-3 text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-lg">
+                <RotateCcw className="w-3 h-3 mr-1" />
+                Restore to Active
+              </Button>
+            )}
+
             <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[#64748B] hover:text-[#F1F5F9] transition-colors">Clear</button>
           </motion.div>
         )}
@@ -545,8 +623,16 @@ export default function LeadsPage() {
         <div className="bg-[#111827] border border-white/[0.08] rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.08]">
             <span className="text-[13px] text-[#64748B]">
-              {isLoading ? "Loading…" : `${total.toLocaleString()} leads`}
+              {isLoading
+                ? "Loading…"
+                : `${total.toLocaleString()} ${viewingArchived ? "archived" : "active"} lead${total === 1 ? "" : "s"}`}
             </span>
+            {viewingArchived && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-amber-300/90">
+                <Archive className="w-3 h-3" />
+                Archive view
+              </span>
+            )}
           </div>
 
           <Table>
@@ -561,19 +647,20 @@ export default function LeadsPage() {
                   />
                 </TableHead>
                 <TableHead className="px-5 py-3 text-[11px] text-[#64748B] uppercase tracking-widest font-semibold">Lead</TableHead>
+                <TableHead className="px-5 py-3 text-[11px] text-[#64748B] uppercase tracking-widest font-semibold">Status</TableHead>
                 <TableHead className="px-5 py-3 text-[11px] text-[#64748B] uppercase tracking-widest font-semibold">Stage</TableHead>
                 <TableHead className="px-5 py-3 text-[11px] text-[#64748B] uppercase tracking-widest font-semibold">Score</TableHead>
                 <TableHead className="px-5 py-3 text-[11px] text-[#64748B] uppercase tracking-widest font-semibold">Tags</TableHead>
                 <TableHead className="px-5 py-3 text-[11px] text-[#64748B] uppercase tracking-widest font-semibold">Source</TableHead>
                 <TableHead className="px-5 py-3 text-[11px] text-[#64748B] uppercase tracking-widest font-semibold">Updated</TableHead>
-                <TableHead className="px-5 py-3 w-10" />
+                <TableHead className="px-5 py-3 w-12" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading
                 ? Array.from({ length: 5 }, (_, i) => (
                     <TableRow key={i} className="border-b border-white/[0.08]">
-                      {Array.from({ length: 8 }, (__, j) => (
+                      {Array.from({ length: 9 }, (__, j) => (
                         <TableCell key={j} className="px-5 py-4">
                           <div className="h-4 bg-white/[0.04] rounded animate-pulse" />
                         </TableCell>
@@ -584,8 +671,9 @@ export default function LeadsPage() {
                     <TableRow
                       key={lead.id}
                       className={cn(
-                        "border-b border-white/[0.08] hover:bg-white/[0.025] transition-colors",
+                        "group border-b border-white/[0.08] hover:bg-white/[0.025] transition-colors",
                         selectedIds.has(lead.id) && "bg-sky-500/5",
+                        viewingArchived && "opacity-90",
                       )}
                     >
                       <TableCell className="px-5 py-3.5">
@@ -598,7 +686,7 @@ export default function LeadsPage() {
                         />
                       </TableCell>
                       <TableCell className="px-5 py-3.5">
-                        <Link href={`/leads/${lead.id}`} className="flex items-center gap-3 group">
+                        <Link href={`/leads/${lead.id}`} className="flex items-center gap-3">
                           <div
                             className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
                             style={{ background: gradientFromName(displayName(lead)) }}
@@ -612,6 +700,18 @@ export default function LeadsPage() {
                             <div className="text-xs text-[#64748B] font-mono">{lead.email}</div>
                           </div>
                         </Link>
+                      </TableCell>
+                      <TableCell className="px-5 py-3.5">
+                        <Badge
+                          className={cn(
+                            "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border",
+                            lead.status === "archived"
+                              ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                              : "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+                          )}
+                        >
+                          {lead.status}
+                        </Badge>
                       </TableCell>
                       <TableCell className="px-5 py-3.5">
                         <Badge className={cn("text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md", stageBadgeClasses[lead.lifecycleStage])}>
@@ -639,21 +739,55 @@ export default function LeadsPage() {
                       <TableCell className="px-5 py-3.5 text-sm text-[#94A3B8]">{lead.source}</TableCell>
                       <TableCell className="px-5 py-3.5 text-xs text-[#64748B] font-mono">{formatTimeAgo(lead.updatedAt)}</TableCell>
                       <TableCell className="px-5 py-3.5">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); deleteLeadMutation.mutate(lead.id); }}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-[#64748B] hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                          title="Archive lead"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {viewingArchived ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void bulkActionMutation.mutateAsync({ leadIds: [lead.id], action: "activate" });
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-[#64748B] hover:text-emerald-300 hover:bg-emerald-500/10 transition-all"
+                            title="Restore to active"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteLeadMutation.mutate(lead.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-[#64748B] hover:text-amber-300 hover:bg-amber-500/10 transition-all"
+                            title="Archive lead"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
               {!isLoading && items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="px-5 py-12 text-center text-sm text-[#64748B]">
-                    No leads match your filters.{" "}
-                    <button onClick={() => setParams({ sortBy: "createdAt", sortOrder: "desc", page: 1, limit: 25 })} className="text-sky-400 hover:underline">Clear filters</button>
+                  <TableCell colSpan={9} className="px-5 py-12 text-center text-sm text-[#64748B]">
+                    {viewingArchived ? (
+                      <>
+                        No archived leads yet.{" "}
+                        <button onClick={() => setStatus("active")} className="text-sky-400 hover:underline">
+                          Back to active leads
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        No active leads match your filters.{" "}
+                        <button
+                          onClick={() =>
+                            setParams({ status: "active", sortBy: "createdAt", sortOrder: "desc", page: 1, limit: 25 })
+                          }
+                          className="text-sky-400 hover:underline"
+                        >
+                          Clear filters
+                        </button>
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               )}

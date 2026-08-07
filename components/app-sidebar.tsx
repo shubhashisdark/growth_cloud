@@ -17,7 +17,6 @@ import {
   SidebarMenuButton,
   SidebarRail,
   SidebarInset,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -37,10 +36,15 @@ import {
   Plug,
   Settings,
   ChevronUp,
+  UserRound,
+  SlidersHorizontal,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/backend";
 import { useAuthSessionStore } from "@/lib/stores/auth-session";
+import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 function LogoMark() {
   return (
@@ -110,16 +114,22 @@ function NavLink({
 function SidebarInner() {
   const pathname = usePathname();
   const router = useRouter();
-  const { state } = useSidebar();
   const session = useAuthSessionStore((store) => store.session);
   const clearSession = useAuthSessionStore((store) => store.clearSession);
+  const { user } = useAuth();
+  const { workspace } = useWorkspace();
   const [logoutPending, setLogoutPending] = useState(false);
 
-  const membership = session?.user?.memberships?.[0] ?? null;
-  const workspaceName = membership?.workspaceId ?? session?.user?.name ?? "No workspace";
-  const workspaceRole = membership?.role ?? (session?.user?.status ?? "Member");
-  const workspaceLabel = membership ? membership.workspaceId : "Create or join a workspace";
-  const initials = (session?.user?.name ?? "GC")
+  const displayUser = user ?? session?.user ?? null;
+  const membership = displayUser?.memberships?.[0] ?? null;
+  const workspaceName = workspace?.name ?? displayUser?.name ?? "Growth Cloud";
+  const workspaceRole = membership?.role ?? displayUser?.status ?? "Member";
+  const workspaceLabel = displayUser?.email ?? "Signed in account";
+  const formattedRole = String(workspaceRole)
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+  const initials = (displayUser?.name ?? "GC")
     .split(" ")
     .map((part) => part[0])
     .filter(Boolean)
@@ -159,8 +169,8 @@ function SidebarInner() {
           </span>
         </div>
         <div className="px-2 mt-6 mb-2">
-          <div className="text-[13px] font-semibold text-[#F1F5F9]">{workspaceName}</div>
-          <div className="text-[11px] text-[#64748B] mt-0.5">{workspaceLabel}</div>
+          <div className="text-[13px] font-semibold text-[#F1F5F9] truncate">{workspaceName}</div>
+          <div className="text-[11px] text-[#64748B] mt-0.5 truncate">{workspace?.slug ? `/${workspace.slug}` : "Workspace"}</div>
         </div>
       </SidebarHeader>
 
@@ -205,7 +215,7 @@ function SidebarInner() {
               <NavLink
                 key={item.href}
                 item={item}
-                active={pathname === item.href}
+                active={pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`))}
               />
             ))}
           </SidebarMenu>
@@ -216,7 +226,12 @@ function SidebarInner() {
         <div className="border-t border-white/[0.08] pt-3">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-[#1E2538] transition-colors">
+              <button
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-[#1E2538] transition-colors",
+                  pathname.startsWith("/settings/profile") && "bg-[rgba(56,189,248,0.08)]"
+                )}
+              >
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
                   style={{
@@ -227,8 +242,10 @@ function SidebarInner() {
                   {initials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold text-[#F1F5F9] truncate">{session?.user?.name ?? "Signed out"}</div>
-                  <div className="text-[11px] text-[#64748B]">{workspaceRole}</div>
+                  <div className="text-[13px] font-semibold text-[#F1F5F9] truncate">
+                    {displayUser?.name ?? "Signed out"}
+                  </div>
+                  <div className="text-[11px] text-[#64748B] truncate">{formattedRole}</div>
                 </div>
                 <ChevronUp className="w-4 h-4 text-[#64748B] shrink-0" />
               </button>
@@ -237,24 +254,40 @@ function SidebarInner() {
               align="start"
               side="right"
               sideOffset={8}
-              className="w-48 bg-[#1A1F2E] border-white/[0.08]"
+              className="w-56 bg-[#1A1F2E] border-white/[0.08]"
             >
-              <DropdownMenuItem className="text-[#F1F5F9] focus:bg-[#1E2538] focus:text-[#F1F5F9]">
-                Profile
+              <div className="px-2 py-2 border-b border-white/[0.06] mb-1">
+                <div className="text-[13px] font-semibold text-[#F1F5F9] truncate">
+                  {displayUser?.name ?? "Signed out"}
+                </div>
+                <div className="text-[11px] text-[#64748B] truncate">{workspaceLabel}</div>
+              </div>
+              <DropdownMenuItem
+                asChild
+                className="text-[#F1F5F9] focus:bg-[#1E2538] focus:text-[#F1F5F9] cursor-pointer"
+              >
+                <Link href="/settings/profile" className="flex items-center gap-2">
+                  <UserRound className="w-4 h-4 text-[#38BDF8]" />
+                  Profile
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-[#F1F5F9] focus:bg-[#1E2538] focus:text-[#F1F5F9]">
-                Preferences
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-[#F1F5F9] focus:bg-[#1E2538] focus:text-[#F1F5F9]">
-                Billing
+              <DropdownMenuItem
+                asChild
+                className="text-[#F1F5F9] focus:bg-[#1E2538] focus:text-[#F1F5F9] cursor-pointer"
+              >
+                <Link href="/settings" className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-[#94A3B8]" />
+                  Preferences
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={logoutPending}
-                className="text-[#F87171] focus:bg-[#1E2538] focus:text-[#F87171]"
+                className="text-[#F87171] focus:bg-[#1E2538] focus:text-[#F87171] cursor-pointer"
                 onClick={() => {
                   void handleLogout();
                 }}
               >
+                <LogOut className="w-4 h-4" />
                 {logoutPending ? "Logging out..." : "Log out"}
               </DropdownMenuItem>
             </DropdownMenuContent>

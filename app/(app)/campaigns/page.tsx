@@ -319,6 +319,11 @@ export default function CampaignsPage() {
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
+                          {sendCampaignMutation.isError && sendCampaignMutation.variables === campaign.id && (
+                            <div className="mt-1 text-[11px] text-rose-300 max-w-[180px] text-right">
+                              {sendCampaignMutation.error.message}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

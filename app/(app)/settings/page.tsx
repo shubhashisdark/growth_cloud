@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, Users, Key, BarChart2, ShieldCheck, ChevronRight } from "lucide-react";
+import { Building2, Users, Key, BarChart2, UserRound, ChevronRight } from "lucide-react";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -10,6 +10,14 @@ export default function SettingsPage() {
   const { workspace, members } = useWorkspace();
 
   const settingsCards = [
+    {
+      title: "Your Profile",
+      description: "View your account details, role, email verification status, and workspace memberships.",
+      icon: UserRound,
+      href: "/settings/profile",
+      tag: user?.name || "Account",
+      color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
+    },
     {
       title: "Workspace Preferences",
       description: "Manage workspace name, slug, timezone, and plan options.",

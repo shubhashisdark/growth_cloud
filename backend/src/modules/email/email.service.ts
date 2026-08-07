@@ -254,28 +254,57 @@ export function buildTrackingUrls({
   baseUrl,
   campaignId,
   messageId,
-  recipientId
+  recipientId,
+  recipientEmail,
 }: {
   baseUrl: string;
   campaignId: string;
   messageId: string;
   recipientId: string;
+  recipientEmail?: string;
 }) {
   const base = new URL(baseUrl);
-  const openPixelUrl = new URL("/api/v1/tracking/open", base);
+  const openPixelUrl = new URL("/api/v1/email/tracking/open", base);
   openPixelUrl.searchParams.set("campaignId", campaignId);
   openPixelUrl.searchParams.set("messageId", messageId);
   openPixelUrl.searchParams.set("recipientId", recipientId);
+  if (recipientEmail) openPixelUrl.searchParams.set("recipientEmail", recipientEmail);
 
-  const clickRedirectUrl = new URL("/api/v1/tracking/click", base);
+  const clickRedirectUrl = new URL("/api/v1/email/tracking/click", base);
   clickRedirectUrl.searchParams.set("campaignId", campaignId);
   clickRedirectUrl.searchParams.set("messageId", messageId);
   clickRedirectUrl.searchParams.set("recipientId", recipientId);
+  if (recipientEmail) clickRedirectUrl.searchParams.set("recipientEmail", recipientEmail);
 
   return {
     openPixelUrl: openPixelUrl.toString(),
-    clickRedirectUrl: clickRedirectUrl.toString()
+    clickRedirectUrl: clickRedirectUrl.toString(),
   };
+}
+
+/** Rewrites http(s) <a href> links so clicks pass through the tracking redirect. */
+export function wrapHtmlLinksForClickTracking(html: string, clickBaseUrl: string) {
+  return html.replace(/<a\b([^>]*?)href\s*=\s*(["'])(.*?)\2([^>]*)>/gi, (match, pre, quote, href, post) => {
+    const rawHref = String(href || "").trim();
+    if (!rawHref) return match;
+
+    const lower = rawHref.toLowerCase();
+    if (
+      lower.startsWith("mailto:") ||
+      lower.startsWith("tel:") ||
+      lower.startsWith("#") ||
+      lower.includes("/api/v1/email/tracking/") ||
+      lower.includes("/api/v1/tracking/")
+    ) {
+      return match;
+    }
+
+    if (!/^https?:\/\//i.test(rawHref)) return match;
+
+    const tracked = new URL(clickBaseUrl);
+    tracked.searchParams.set("url", rawHref);
+    return `<a${pre}href=${quote}${tracked.toString()}${quote}${post}>`;
+  });
 }
 
 export function buildWelcomeEmail(name: string, workspaceName: string) {

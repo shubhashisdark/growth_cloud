@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../data/prisma.js";
-import { renderEmailTemplate, buildTrackingUrls } from "./email.service.js";
+import { getConfig } from "../../config/env.js";
+import {
+  renderEmailTemplate,
+  buildTrackingUrls,
+  wrapHtmlLinksForClickTracking,
+} from "./email.service.js";
 import { emailQueue, type SendEmailJobData } from "./email.queue.js";
 
 function nowIso() {
@@ -44,8 +49,8 @@ export type SingleSendInput = {
 export class EmailCampaignsService {
   private baseUrl: string;
 
-  constructor(baseUrl = "http://localhost:4000") {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string) {
+    this.baseUrl = baseUrl || getConfig().apiBaseUrl || "http://localhost:4000";
   }
 
   // ─────────────────────────────────────────────
@@ -203,11 +208,11 @@ export class EmailCampaignsService {
     });
 
     if (leads.length === 0) {
-      await prisma.emailCampaign.update({
-        where: { id: campaign.id },
-        data: { status: "sent", sentAt: new Date(), totalRecipients: 0 },
-      });
-      return { campaign, dispatchedCount: 0 };
+      const error = new Error(
+        "No active leads found in this workspace. Add active leads first, then click Send Now.",
+      );
+      (error as Error & { statusCode?: number }).statusCode = 400;
+      throw error;
     }
 
     // Update campaign status to sending
@@ -244,19 +249,21 @@ export class EmailCampaignsService {
         variables,
       );
 
-      // Inject open tracking pixel and click wrapper
+      // Inject open tracking pixel and wrap links for click tracking
       const tracking = buildTrackingUrls({
         baseUrl: this.baseUrl,
         campaignId: campaign.id,
         messageId: jobId,
         recipientId: lead.id,
+        recipientEmail: lead.email,
       });
 
+      const trackedHtml = wrapHtmlLinksForClickTracking(rendered.html, tracking.clickRedirectUrl);
       const openPixelHtml = `<img src="${tracking.openPixelUrl}" alt="" width="1" height="1" style="display:none;" />`;
       const unsubscribeUrl = `${this.baseUrl}/api/v1/email/tracking/unsubscribe?email=${encodeURIComponent(lead.email)}&workspaceId=${workspaceId}`;
       const footerHtml = `<br/><hr/><p style="font-size:12px;color:#666;">Prefer not to receive these emails? <a href="${unsubscribeUrl}">Unsubscribe here</a></p>`;
 
-      const finalHtml = `${rendered.html}${openPixelHtml}${footerHtml}`;
+      const finalHtml = `${trackedHtml}${openPixelHtml}${footerHtml}`;
 
       jobsToCreate.push({
         id: jobId,
@@ -318,41 +325,128 @@ export class EmailCampaignsService {
   // TRACKING EVENTS & SUPPRESSIONS
   // ─────────────────────────────────────────────
 
-  async recordOpenEvent(campaignId: string, messageId: string, recipientEmail: string) {
-    if (campaignId) {
-      await prisma.emailCampaign.update({
-        where: { id: campaignId },
-        data: { openCount: { increment: 1 } },
-      }).catch(() => null);
+  async recordOpenEvent(
+    campaignId: string,
+    messageId: string,
+    recipientId: string,
+    recipientEmail?: string,
+  ) {
+    if (!campaignId) return;
 
-      await prisma.emailEvent.create({
+    const email =
+      recipientEmail?.trim().toLowerCase() ||
+      (await this.resolveRecipientEmail(recipientId, messageId)) ||
+      recipientId ||
+      "unknown";
+
+    // Unique open: count once per recipient per campaign
+    const alreadyOpened = await prisma.emailEvent.findFirst({
+      where: { campaignId, recipientEmail: email, eventType: "open" },
+      select: { id: true },
+    });
+
+    if (!alreadyOpened) {
+      await prisma.emailCampaign
+        .update({
+          where: { id: campaignId },
+          data: { openCount: { increment: 1 } },
+        })
+        .catch(() => null);
+    }
+
+    if (messageId) {
+      await prisma.emailJob
+        .updateMany({
+          where: { id: messageId, campaignId },
+          data: { openCount: { increment: 1 } },
+        })
+        .catch(() => null);
+    }
+
+    await prisma.emailEvent
+      .create({
         data: {
           id: `evt_${randomUUID().slice(0, 8)}`,
           campaignId,
-          recipientEmail: recipientEmail || "unknown",
+          recipientEmail: email,
           eventType: "open",
+          metadataJson: JSON.stringify({ messageId, recipientId, unique: !alreadyOpened }),
         },
-      }).catch(() => null);
-    }
+      })
+      .catch(() => null);
   }
 
-  async recordClickEvent(campaignId: string, messageId: string, recipientEmail: string, targetUrl: string) {
-    if (campaignId) {
-      await prisma.emailCampaign.update({
-        where: { id: campaignId },
-        data: { clickCount: { increment: 1 } },
-      }).catch(() => null);
+  async recordClickEvent(
+    campaignId: string,
+    messageId: string,
+    recipientId: string,
+    targetUrl: string,
+    recipientEmail?: string,
+  ) {
+    if (!campaignId) return;
 
-      await prisma.emailEvent.create({
+    const email =
+      recipientEmail?.trim().toLowerCase() ||
+      (await this.resolveRecipientEmail(recipientId, messageId)) ||
+      recipientId ||
+      "unknown";
+
+    // Unique click: count once per recipient per campaign
+    const alreadyClicked = await prisma.emailEvent.findFirst({
+      where: { campaignId, recipientEmail: email, eventType: "click" },
+      select: { id: true },
+    });
+
+    if (!alreadyClicked) {
+      await prisma.emailCampaign
+        .update({
+          where: { id: campaignId },
+          data: { clickCount: { increment: 1 } },
+        })
+        .catch(() => null);
+    }
+
+    if (messageId) {
+      await prisma.emailJob
+        .updateMany({
+          where: { id: messageId, campaignId },
+          data: { clickCount: { increment: 1 } },
+        })
+        .catch(() => null);
+    }
+
+    await prisma.emailEvent
+      .create({
         data: {
           id: `evt_${randomUUID().slice(0, 8)}`,
           campaignId,
-          recipientEmail: recipientEmail || "unknown",
+          recipientEmail: email,
           eventType: "click",
           url: targetUrl,
+          metadataJson: JSON.stringify({ messageId, recipientId, unique: !alreadyClicked }),
         },
-      }).catch(() => null);
+      })
+      .catch(() => null);
+  }
+
+  private async resolveRecipientEmail(recipientId: string, messageId: string) {
+    if (messageId) {
+      const job = await prisma.emailJob.findFirst({
+        where: { id: messageId },
+        select: { recipientEmail: true },
+      });
+      if (job?.recipientEmail) return job.recipientEmail.toLowerCase();
     }
+
+    if (recipientId) {
+      const lead = await prisma.lead.findFirst({
+        where: { id: recipientId },
+        select: { email: true },
+      });
+      if (lead?.email) return lead.email.toLowerCase();
+    }
+
+    return null;
   }
 
   async addSuppression(workspaceId: string, email: string, reason = "unsubscribe") {

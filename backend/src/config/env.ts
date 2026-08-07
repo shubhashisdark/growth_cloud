@@ -6,6 +6,7 @@ export interface AppConfig {
   corsOrigin: string;
   authTokenSecret: string;
   appBaseUrl: string | null;
+  apiBaseUrl: string;
   exposeResetTokenInResponse: boolean;
   emailProvider: string | null;
   emailFallbackProvider: string | null;
@@ -52,6 +53,13 @@ export function getConfig(): AppConfig {
     ? requireEnv("APP_BASE_URL", process.env.APP_BASE_URL)
     : process.env.APP_BASE_URL ?? null;
 
+  // Public backend URL used in email open/click tracking pixels.
+  // Must be reachable from the internet (not localhost) for Gmail/etc. to report events.
+  const apiBaseUrl =
+    process.env.API_BASE_URL?.trim() ||
+    process.env.BACKEND_PUBLIC_URL?.trim() ||
+    `http://localhost:${parsePort(process.env.PORT)}`;
+
   const corsOrigin = isProduction
     ? requireEnv("CORS_ORIGIN", process.env.CORS_ORIGIN)
     : process.env.CORS_ORIGIN ?? "*";
@@ -88,6 +96,7 @@ export function getConfig(): AppConfig {
     corsOrigin,
     authTokenSecret,
     appBaseUrl,
+    apiBaseUrl,
     exposeResetTokenInResponse: parseBoolean(process.env.RESET_TOKEN_EXPOSE_IN_RESPONSE, !isProduction),
     emailProvider,
     emailFallbackProvider,

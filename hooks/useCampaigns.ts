@@ -19,7 +19,7 @@ export function useCampaigns() {
   const queryClient = useQueryClient();
   const session = useAuthSessionStore((state) => state.session);
   const token = session?.accessToken ?? "";
-  const workspaceId = session?.user?.memberships?.[0]?.workspaceId ?? "";
+  const workspaceId = session?.workspaceId || session?.user?.memberships?.[0]?.workspaceId || "";
 
   // Query: Campaigns list
   const campaignsQuery = useQuery({
@@ -119,7 +119,7 @@ export function useCampaigns() {
 export function useCampaignDetail(campaignId: string | null) {
   const session = useAuthSessionStore((state) => state.session);
   const token = session?.accessToken ?? "";
-  const workspaceId = session?.user?.memberships?.[0]?.workspaceId ?? "";
+  const workspaceId = session?.workspaceId || session?.user?.memberships?.[0]?.workspaceId || "";
 
   const campaignQuery = useQuery({
     queryKey: ["campaign", campaignId, workspaceId],
