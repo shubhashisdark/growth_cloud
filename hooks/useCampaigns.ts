@@ -13,6 +13,7 @@ import {
   deleteEmailTemplate,
   sendSingleEmail,
   listEmailSuppressions,
+  deleteEmailSuppression,
 } from "@/lib/backend";
 
 export function useCampaigns() {
@@ -93,6 +94,14 @@ export function useCampaigns() {
     },
   });
 
+  // Mutation: Remove suppression (re-subscribe)
+  const removeSuppressionMutation = useMutation({
+    mutationFn: (suppressionId: string) => deleteEmailSuppression(suppressionId, workspaceId, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["email-suppressions", workspaceId] });
+    },
+  });
+
   // Mutation: Single Send
   const singleSendMutation = useMutation({
     mutationFn: (payload: { to: string; recipientName?: string; subject: string; html: string }) =>
@@ -106,12 +115,14 @@ export function useCampaigns() {
     templates: templatesQuery.data ?? [],
     suppressions: suppressionsQuery.data ?? [],
     isLoading: campaignsQuery.isLoading || templatesQuery.isLoading,
+    isLoadingSuppressions: suppressionsQuery.isLoading,
     error: campaignsQuery.error || templatesQuery.error,
     createCampaignMutation,
     sendCampaignMutation,
     deleteCampaignMutation,
     createTemplateMutation,
     deleteTemplateMutation,
+    removeSuppressionMutation,
     singleSendMutation,
   };
 }

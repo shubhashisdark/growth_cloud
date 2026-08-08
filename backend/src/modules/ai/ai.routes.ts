@@ -57,13 +57,16 @@ function buildPrompt(type: PromptType, input: Record<string, unknown>) {
       return {
         title: "AI Email Generator",
         prompt: [
-          `Generate a marketing email with the following constraints:`,
+          `Generate a complete marketing email template as JSON only (no markdown fences).`,
           `Goal: ${payload.goal ?? "Increase engagement and conversions"}`,
           `Audience: ${payload.audience ?? "B2B marketing audience"}`,
           `Tone: ${payload.tone ?? "clear, concise, persuasive"}`,
-          `Subject: ${payload.subject ?? "Create a high-performing subject line"}`,
+          `Subject hint: ${payload.subject ?? "Create a high-performing subject line"}`,
           payload.context ? `Context: ${payload.context}` : "",
-          `Return: subject, preview text, body copy, CTA, and 3 variations.`
+          `Use personalization tokens where useful: {{firstName}}, {{company}}, {{email}}.`,
+          `Return exactly this JSON shape:`,
+          `{"subject":"...","previewText":"...","htmlContent":"<div>...</div>","textContent":"...","ctaLabel":"...","ctaUrl":"https://example.com"}`,
+          `htmlContent must be a simple inline-styled HTML email body with greeting, short paragraphs, one CTA link button, and a short footer.`,
         ].filter(Boolean).join("\n")
       };
     }

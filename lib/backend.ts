@@ -660,6 +660,13 @@ export function listEmailSuppressions(workspaceId: string, accessToken?: string)
   });
 }
 
+export function deleteEmailSuppression(suppressionId: string, workspaceId: string, accessToken?: string) {
+  return fetchBackendJson<BackendSuccessResponse<{ success: boolean }>>(`/api/v1/email/suppressions/${suppressionId}`, {
+    method: "DELETE",
+    headers: { "X-Workspace-Id": workspaceId, ..._authHeaders(accessToken) },
+  });
+}
+
 export function runAiTool(workspaceId: string, type: string, input: Record<string, unknown>, accessToken?: string) {
   return fetchBackendJson<{ data: any }>("/api/v1/ai/run", {
     method: "POST",

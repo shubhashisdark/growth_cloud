@@ -17,19 +17,21 @@ import { cn } from "@/lib/utils";
 import {
   Plus,
   Send,
-  Calendar,
   FileText,
   Trash2,
   Loader2,
   AlertCircle,
   Mail,
-  CheckCircle2,
   MousePointer,
   Eye,
-  ShieldAlert,
+  Sparkles,
+  LayoutTemplate,
+  Wand2,
+  MailX,
 } from "lucide-react";
 import { useCampaigns } from "@/hooks/useCampaigns";
-import type { EmailCampaignItem } from "@/lib/backend";
+import { runAiTool, type EmailCampaignItem } from "@/lib/backend";
+import { useAuthSessionStore } from "@/lib/stores/auth-session";
 
 function statusStyles(status: EmailCampaignItem["status"]) {
   switch (status) {
@@ -81,17 +83,240 @@ function StatCard({
   );
 }
 
+const STARTER_TEMPLATES = [
+  {
+    id: "welcome",
+    name: "Welcome email",
+    subject: "Welcome to {{company}} — let's get started, {{firstName}}",
+    description: "Onboard new leads with a warm hello and clear next step.",
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:0 auto;">
+        <h1 style="font-size:24px;margin-bottom:12px;">Welcome, {{firstName}} 🎉</h1>
+        <p>We're excited to have you with us. Your journey starts here.</p>
+        <p>Explore the platform, connect your tools, and start growing with confidence.</p>
+        <p style="margin:24px 0;">
+          <a href="https://example.com" style="background:#38BDF8;color:#0B0F1A;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;">Get Started</a>
+        </p>
+        <p style="font-size:12px;color:#64748B;">Sent to {{email}}</p>
+      </div>
+    `.trim(),
+  },
+  {
+    id: "product-launch",
+    name: "Product launch",
+    subject: "Something new for you, {{firstName}}",
+    description: "Announce a feature or product with a strong CTA.",
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:0 auto;">
+        <h1 style="font-size:24px;margin-bottom:12px;">Introducing our latest update</h1>
+        <p>Hi {{firstName}},</p>
+        <p>We just launched something built for teams like {{company}}.</p>
+        <ul>
+          <li>Faster workflows</li>
+          <li>Smarter insights</li>
+          <li>Better conversion tracking</li>
+        </ul>
+        <p style="margin:24px 0;">
+          <a href="https://example.com" style="background:#818CF8;color:#fff;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;">See What's New</a>
+        </p>
+      </div>
+    `.trim(),
+  },
+  {
+    id: "nurture",
+    name: "Nurture / tip",
+    subject: "{{firstName}}, a quick tip to move forward",
+    description: "Helpful nurture email for warm leads.",
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:0 auto;">
+        <h1 style="font-size:22px;margin-bottom:12px;">A tip for {{firstName}}</h1>
+        <p>Teams that move faster usually start with one focused action.</p>
+        <p>Today: review your highest-intent leads and send a personal follow-up.</p>
+        <p style="margin:24px 0;">
+          <a href="https://example.com" style="background:#34D399;color:#0B0F1A;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;">Open Dashboard</a>
+        </p>
+      </div>
+    `.trim(),
+  },
+  {
+    id: "reengage",
+    name: "Re-engagement",
+    subject: "Still interested, {{firstName}}?",
+    description: "Win back quiet leads with a simple check-in.",
+    htmlContent: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:0 auto;">
+        <h1 style="font-size:22px;margin-bottom:12px;">We saved your spot</h1>
+        <p>Hi {{firstName}},</p>
+        <p>It's been a while. If growth is still on your mind, we can help {{company}} pick up where you left off.</p>
+        <p style="margin:24px 0;">
+          <a href="https://example.com" style="background:#F59E0B;color:#0B0F1A;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;">Come Back</a>
+        </p>
+      </div>
+    `.trim(),
+  },
+];
+
+function parseAiEmailOutput(output: string): {
+  subject: string;
+  htmlContent: string;
+  textContent?: string;
+} | null {
+  const trimmed = output.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] || trimmed).trim();
+  const jsonMatch = candidate.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      subject?: string;
+      htmlContent?: string;
+      textContent?: string;
+      body?: string;
+      ctaLabel?: string;
+      ctaUrl?: string;
+    };
+
+    const subject = parsed.subject?.trim();
+    let htmlContent = parsed.htmlContent?.trim() || parsed.body?.trim();
+    if (!subject || !htmlContent) return null;
+
+    if (!/<[a-z][\s\S]*>/i.test(htmlContent)) {
+      const ctaLabel = parsed.ctaLabel || "Learn More";
+      const ctaUrl = parsed.ctaUrl || "https://example.com";
+      htmlContent = `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;max-width:560px;margin:0 auto;">
+          <p>${htmlContent.replace(/\n/g, "<br/>")}</p>
+          <p style="margin:24px 0;">
+            <a href="${ctaUrl}" style="background:#38BDF8;color:#0B0F1A;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:700;">${ctaLabel}</a>
+          </p>
+        </div>
+      `.trim();
+    }
+
+    return {
+      subject,
+      htmlContent,
+      textContent: parsed.textContent,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function CreateCampaignDialog({ onCreated }: { onCreated?: () => void }) {
   const [open, setOpen] = React.useState(false);
+  const [mode, setMode] = React.useState<"starter" | "ai" | "saved">("starter");
   const [form, setForm] = React.useState({
     name: "",
     subject: "",
     fromName: "Growth Cloud",
     templateId: "",
   });
+  const [aiGoal, setAiGoal] = React.useState("Increase engagement and conversions");
+  const [aiAudience, setAiAudience] = React.useState("Active leads in my workspace");
+  const [aiTone, setAiTone] = React.useState("excited and professional");
+  const [aiContext, setAiContext] = React.useState("");
+  const [aiBusy, setAiBusy] = React.useState(false);
+  const [aiPreviewHtml, setAiPreviewHtml] = React.useState<string | null>(null);
+  const [aiError, setAiError] = React.useState<string | null>(null);
+  const [selectedStarterId, setSelectedStarterId] = React.useState<string | null>(null);
 
-  const { templates, createCampaignMutation } = useCampaigns();
-  const error = createCampaignMutation.error?.message ?? "";
+  const session = useAuthSessionStore((s) => s.session);
+  const token = session?.accessToken ?? "";
+  const workspaceId = session?.workspaceId || session?.user?.memberships?.[0]?.workspaceId || "";
+
+  const { templates, createCampaignMutation, createTemplateMutation } = useCampaigns();
+  const error = createCampaignMutation.error?.message ?? createTemplateMutation.error?.message ?? "";
+
+  function resetState() {
+    setForm({ name: "", subject: "", fromName: "Growth Cloud", templateId: "" });
+    setMode("starter");
+    setSelectedStarterId(null);
+    setAiPreviewHtml(null);
+    setAiError(null);
+    setAiContext("");
+  }
+
+  async function applyStarter(starterId: string) {
+    const starter = STARTER_TEMPLATES.find((t) => t.id === starterId);
+    if (!starter) return;
+
+    setSelectedStarterId(starterId);
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const created = await createTemplateMutation.mutateAsync({
+        name: `${starter.name} · ${new Date().toLocaleDateString()}`,
+        subject: starter.subject,
+        htmlContent: starter.htmlContent,
+        variables: ["firstName", "company", "email"],
+      });
+      const templateId = created.data.id;
+      setForm((prev) => ({
+        ...prev,
+        subject: prev.subject || starter.subject,
+        name: prev.name || starter.name,
+        templateId,
+      }));
+      setAiPreviewHtml(starter.htmlContent);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Failed to save starter template");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function generateWithAi() {
+    if (!workspaceId || !token) {
+      setAiError("Sign in and select a workspace first.");
+      return;
+    }
+
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const response = await runAiTool(
+        workspaceId,
+        "email-generator",
+        {
+          goal: aiGoal,
+          audience: aiAudience,
+          tone: aiTone,
+          subject: form.subject || undefined,
+          context: aiContext || form.name || undefined,
+        },
+        token,
+      );
+
+      const parsed = parseAiEmailOutput(String(response.data?.output || ""));
+      if (!parsed) {
+        setAiError("AI returned an unreadable draft. Try again with a clearer goal.");
+        return;
+      }
+
+      const created = await createTemplateMutation.mutateAsync({
+        name: `AI · ${form.name || parsed.subject}`.slice(0, 80),
+        subject: parsed.subject,
+        htmlContent: parsed.htmlContent,
+        textContent: parsed.textContent,
+        variables: ["firstName", "company", "email"],
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        subject: parsed.subject,
+        templateId: created.data.id,
+        name: prev.name || parsed.subject.slice(0, 48),
+      }));
+      setAiPreviewHtml(parsed.htmlContent);
+      setSelectedStarterId(null);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI generation failed");
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -102,7 +327,7 @@ function CreateCampaignDialog({ onCreated }: { onCreated?: () => void }) {
       templateId: form.templateId || undefined,
     });
     setOpen(false);
-    setForm({ name: "", subject: "", fromName: "Growth Cloud", templateId: "" });
+    resetState();
     onCreated?.();
   }
 
@@ -116,16 +341,169 @@ function CreateCampaignDialog({ onCreated }: { onCreated?: () => void }) {
         New Campaign
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-[#111827] border-white/[0.08] text-[#F1F5F9] max-w-md">
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) resetState();
+        }}
+      >
+        <DialogContent className="bg-[#111827] border-white/[0.08] text-[#F1F5F9] max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Email Campaign</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            {error && (
+            {(error || aiError) && (
               <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-sm text-rose-300">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                {error}
+                {aiError || error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.08] bg-[#0B0F1A] p-1">
+              {(
+                [
+                  { id: "starter", label: "Starters", icon: LayoutTemplate },
+                  { id: "ai", label: "AI template", icon: Wand2 },
+                  { id: "saved", label: "Saved", icon: Mail },
+                ] as const
+              ).map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setMode(tab.id)}
+                    className={cn(
+                      "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors",
+                      mode === tab.id ? "bg-[#1A1F2E] text-[#F1F5F9]" : "text-[#64748B] hover:text-[#F1F5F9]",
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {mode === "starter" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {STARTER_TEMPLATES.map((starter) => (
+                  <button
+                    key={starter.id}
+                    type="button"
+                    disabled={aiBusy}
+                    onClick={() => void applyStarter(starter.id)}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-colors",
+                      selectedStarterId === starter.id
+                        ? "border-sky-500/40 bg-sky-500/10"
+                        : "border-white/[0.08] bg-[#0B0F1A] hover:border-white/20",
+                    )}
+                  >
+                    <div className="text-sm font-semibold text-[#F1F5F9]">{starter.name}</div>
+                    <div className="text-[11px] text-[#64748B] mt-1 leading-relaxed">{starter.description}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {mode === "ai" && (
+              <div className="space-y-3 rounded-xl border border-white/[0.08] bg-[#0B0F1A] p-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#F1F5F9]">
+                  <Sparkles className="w-4 h-4 text-sky-400" />
+                  Generate an AI email template
+                </div>
+                <div>
+                  <label className="block text-xs text-[#64748B] mb-1">Goal</label>
+                  <Input
+                    value={aiGoal}
+                    onChange={(e) => setAiGoal(e.target.value)}
+                    className="bg-[#111827] border-white/[0.08] text-[#F1F5F9] h-9 text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-[#64748B] mb-1">Audience</label>
+                    <Input
+                      value={aiAudience}
+                      onChange={(e) => setAiAudience(e.target.value)}
+                      className="bg-[#111827] border-white/[0.08] text-[#F1F5F9] h-9 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#64748B] mb-1">Tone</label>
+                    <select
+                      value={aiTone}
+                      onChange={(e) => setAiTone(e.target.value)}
+                      className="w-full h-9 rounded-lg bg-[#111827] border border-white/[0.08] text-[#F1F5F9] text-sm px-3"
+                    >
+                      <option value="excited and professional">Excited & Professional</option>
+                      <option value="formal and informative">Formal & Informative</option>
+                      <option value="casual and friendly">Casual & Friendly</option>
+                      <option value="urgent and persuasive">Urgent & Persuasive</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-[#64748B] mb-1">Extra context (optional)</label>
+                  <textarea
+                    value={aiContext}
+                    onChange={(e) => setAiContext(e.target.value)}
+                    rows={2}
+                    placeholder="Offer details, CTA URL, product name..."
+                    className="w-full rounded-lg bg-[#111827] border border-white/[0.08] text-[#F1F5F9] text-sm px-3 py-2 resize-none"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  disabled={aiBusy}
+                  onClick={() => void generateWithAi()}
+                  className="h-9 bg-violet-500 hover:bg-violet-400 text-white font-semibold"
+                >
+                  {aiBusy ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5 mr-1.5" />}
+                  Generate with AI
+                </Button>
+                <p className="text-[11px] text-[#64748B]">
+                  AI will draft a subject and email body, then save it as a reusable template for this campaign.
+                </p>
+              </div>
+            )}
+
+            {mode === "saved" && (
+              <div>
+                <label className="block text-xs text-[#64748B] mb-1">Choose saved template</label>
+                <select
+                  value={form.templateId}
+                  onChange={(e) => {
+                    const templateId = e.target.value;
+                    const selected = templates.find((t) => t.id === templateId);
+                    setForm((prev) => ({
+                      ...prev,
+                      templateId,
+                      subject: selected?.subject || prev.subject,
+                    }));
+                    setAiPreviewHtml(selected?.htmlContent || null);
+                  }}
+                  className="w-full h-9 rounded-lg bg-[#0B0F1A] border border-white/[0.08] text-[#F1F5F9] text-sm px-3"
+                >
+                  <option value="">No Template (Plain Subject)</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                {templates.length === 0 && (
+                  <p className="text-[11px] text-[#64748B] mt-2">
+                    No saved templates yet. Use Starters or AI template first.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {aiPreviewHtml && (
+              <div className="rounded-xl border border-white/[0.08] bg-white p-4 text-[#111827] max-h-48 overflow-auto">
+                <div className="text-[10px] uppercase tracking-wider text-[#64748B] mb-2">Preview</div>
+                <div dangerouslySetInnerHTML={{ __html: aiPreviewHtml }} />
               </div>
             )}
 
@@ -161,23 +539,19 @@ function CreateCampaignDialog({ onCreated }: { onCreated?: () => void }) {
               />
             </div>
 
-            <div>
-              <label className="block text-xs text-[#64748B] mb-1">Email Template</label>
-              <select
-                value={form.templateId}
-                onChange={(e) => setForm((p) => ({ ...p, templateId: e.target.value }))}
-                className="w-full h-9 rounded-lg bg-[#0B0F1A] border border-white/[0.08] text-[#F1F5F9] text-sm px-3"
-              >
-                <option value="">No Template (Plain Subject)</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
+            {form.templateId && (
+              <div className="text-[11px] text-emerald-300/90">
+                Template attached and ready to send with this campaign.
+              </div>
+            )}
 
             <DialogFooter className="pt-2">
               <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="text-[#64748B]">Cancel</Button>
-              <Button type="submit" disabled={createCampaignMutation.isPending} className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold">
+              <Button
+                type="submit"
+                disabled={createCampaignMutation.isPending || aiBusy}
+                className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold"
+              >
                 {createCampaignMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : "Create Draft"}
               </Button>
             </DialogFooter>
@@ -213,6 +587,12 @@ export default function CampaignsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/campaigns/unsubscribed">
+              <Button variant="outline" className="h-9 px-4 border-white/[0.12] text-[#94A3B8] bg-transparent hover:bg-white/5 hover:text-[#F1F5F9] text-sm rounded-lg">
+                <MailX className="w-3.5 h-3.5 mr-1.5" />
+                Unsubscribed
+              </Button>
+            </Link>
             <Link href="/campaigns/templates">
               <Button variant="outline" className="h-9 px-4 border-white/[0.12] text-[#94A3B8] bg-transparent hover:bg-white/5 hover:text-[#F1F5F9] text-sm rounded-lg">
                 <FileText className="w-3.5 h-3.5 mr-1.5" />
