@@ -94,6 +94,7 @@ sdkRouter.post("/identify", requirePublicKey, async (req, res) => {
   const existing = await prisma.lead.findFirst({ where: { workspaceId, email } });
 
   let lead;
+  let isNewLead = false;
   if (existing) {
     lead = await prisma.lead.update({
       where: { id: existing.id },
@@ -106,6 +107,7 @@ sdkRouter.post("/identify", requirePublicKey, async (req, res) => {
       },
     });
   } else {
+    isNewLead = true;
     lead = await prisma.lead.create({
       data: {
         id: `lead_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
@@ -123,9 +125,13 @@ sdkRouter.post("/identify", requirePublicKey, async (req, res) => {
     });
   }
 
-  // Trigger workflows & dispatch webhooks
-  void triggerWorkflowsForEvent(workspaceId, "lead_created", lead.id, { traits });
-  void dispatchWebhookEvent(workspaceId, "lead.updated", { leadId: lead.id, email: lead.email, traits });
+  // Only fire lead_created for brand-new leads (avoids duplicate welcome emails)
+  if (isNewLead) {
+    void triggerWorkflowsForEvent(workspaceId, "lead_created", lead.id, { traits });
+    void dispatchWebhookEvent(workspaceId, "lead.created", { leadId: lead.id, email: lead.email, traits });
+  } else {
+    void dispatchWebhookEvent(workspaceId, "lead.updated", { leadId: lead.id, email: lead.email, traits });
+  }
 
   res.json({
     data: { identified: true, leadId: lead.id, email: lead.email },
@@ -181,12 +187,14 @@ sdkRouter.post("/lead-sync", requirePublicKey, async (req, res) => {
 
   const existing = await prisma.lead.findFirst({ where: { workspaceId, email } });
   let lead;
+  let isNewLead = false;
   if (existing) {
     lead = await prisma.lead.update({
       where: { id: existing.id },
       data: { firstName: firstName || existing.firstName, lastName: lastName || existing.lastName, company: company || existing.company, lifecycleStage },
     });
   } else {
+    isNewLead = true;
     lead = await prisma.lead.create({
       data: {
         id: `lead_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
@@ -196,8 +204,12 @@ sdkRouter.post("/lead-sync", requirePublicKey, async (req, res) => {
     });
   }
 
-  void triggerWorkflowsForEvent(workspaceId, "lead_created", lead.id, data);
-  void dispatchWebhookEvent(workspaceId, "lead.created", { leadId: lead.id, email: lead.email });
+  if (isNewLead) {
+    void triggerWorkflowsForEvent(workspaceId, "lead_created", lead.id, data);
+    void dispatchWebhookEvent(workspaceId, "lead.created", { leadId: lead.id, email: lead.email });
+  } else {
+    void dispatchWebhookEvent(workspaceId, "lead.updated", { leadId: lead.id, email: lead.email });
+  }
 
   res.json({
     data: { synced: true, leadId: lead.id },
