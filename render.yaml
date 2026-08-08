@@ -36,7 +36,9 @@ services:
       # Frontend public URL (update after frontend gets its .onrender.com URL)
       - key: APP_BASE_URL
         sync: false
-      # Must match the frontend origin exactly, e.g. https://growth-cloud-web.onrender.com
+      # Dashboard / app origins only (comma-separated).
+      # SDK routes (/api/v1/sdk) allow any customer website origin automatically.
+      # e.g. https://growth-cloud-web.onrender.com
       - key: CORS_ORIGIN
         sync: false
       # Optional email (invites / password reset). Leave unset to skip sending.

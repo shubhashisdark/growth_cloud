@@ -21,7 +21,39 @@ export function createApp() {
   const config = getConfig();
   const app = express();
 
-  app.use(cors({ origin: config.corsOrigin }));
+  // Public SDK endpoints are called from customer websites (any domain).
+  // Auth is the public API key — same pattern as Segment/Mixpanel browser SDKs.
+  const sdkCors = cors({
+    origin: true, // echo request Origin
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "X-GrowthCloud-Public-Key", "Authorization"],
+    maxAge: 86400,
+  });
+
+  // Dashboard / authenticated API: only allow configured app origins.
+  const appCors = cors({
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (config.corsOrigins === "*" || config.corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
+    credentials: true,
+  });
+
+  app.use((request, response, next) => {
+    const path = request.path || "";
+    if (path.startsWith("/api/v1/sdk") || path.startsWith("/api/v1/tracking")) {
+      return sdkCors(request, response, next);
+    }
+    return appCors(request, response, next);
+  });
+
   app.use(express.json({ limit: "2mb" }));
   app.use(express.text({ type: ["text/plain", "text/csv"], limit: "2mb" }));
 

@@ -4,6 +4,7 @@ export interface AppConfig {
   port: number;
   nodeEnv: string;
   corsOrigin: string;
+  corsOrigins: string[] | "*";
   authTokenSecret: string;
   appBaseUrl: string | null;
   apiBaseUrl: string;
@@ -41,6 +42,24 @@ function parseOptionalProvider(value: string | undefined) {
   throw new Error(`Unsupported EMAIL_PROVIDER`);
 }
 
+function parseCorsOrigins(raw: string | undefined, isProduction: boolean): { corsOrigin: string; corsOrigins: string[] | "*" } {
+  const value = (raw ?? (isProduction ? "" : "*")).trim();
+  if (!value) {
+    throw new Error("CORS_ORIGIN is required in production");
+  }
+  if (value === "*") {
+    return { corsOrigin: "*", corsOrigins: "*" };
+  }
+  const list = value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (list.length === 0) {
+    throw new Error("CORS_ORIGIN must include at least one origin");
+  }
+  return { corsOrigin: list.join(","), corsOrigins: list };
+}
+
 export function getConfig(): AppConfig {
   const nodeEnv = process.env.APP_ENV ?? process.env.NODE_ENV ?? "development";
   const isProduction = nodeEnv === "production";
@@ -60,9 +79,9 @@ export function getConfig(): AppConfig {
     process.env.BACKEND_PUBLIC_URL?.trim() ||
     `http://localhost:${parsePort(process.env.PORT)}`;
 
-  const corsOrigin = isProduction
-    ? requireEnv("CORS_ORIGIN", process.env.CORS_ORIGIN)
-    : process.env.CORS_ORIGIN ?? "*";
+  const { corsOrigin, corsOrigins } = isProduction
+    ? parseCorsOrigins(requireEnv("CORS_ORIGIN", process.env.CORS_ORIGIN), true)
+    : parseCorsOrigins(process.env.CORS_ORIGIN ?? "*", false);
 
   const emailProvider = parseOptionalProvider(process.env.EMAIL_PROVIDER);
   const emailFallbackProvider = parseOptionalProvider(process.env.EMAIL_FALLBACK_PROVIDER);
@@ -94,6 +113,7 @@ export function getConfig(): AppConfig {
     port: parsePort(process.env.PORT),
     nodeEnv,
     corsOrigin,
+    corsOrigins,
     authTokenSecret,
     appBaseUrl,
     apiBaseUrl,

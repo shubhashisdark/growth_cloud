@@ -124,21 +124,50 @@ function SdkConnectGuide({
 
 const growthcloud = init({
   publicKey: '${keyForSnippet}',
-  autoCaptureForms: true,
-  // Point SDK at your local/backend API if needed:
-  // baseUrl: 'http://localhost:4000',
+  // Required in production — your Growth Cloud API URL:
+  baseUrl: 'https://growth-cloud.onrender.com',
+  autoCaptureForms: true, // optional: auto-send HTML form submits
 });
 
-// Identify a visitor as a lead
+// 1) Who is the user? (creates/updates a Lead — use on signup/login/checkout)
 await growthcloud.identify('sarah@acme.com', {
   firstName: 'Sarah',
   lastName: 'Connor',
   company: 'Acme Corp',
+  phone: '+1-555-0100',
+  source: 'website',
+  lifecycleStage: 'lead',
+  // Send any extra fields you want:
+  plan: 'pro',
+  country: 'US',
 });
 
-// Track product events
-await growthcloud.track('demo_requested', {
+// 2) What did they do? (any event name + any properties)
+await growthcloud.track('added_to_cart', {
+  productId: 'sku_123',
+  value: 2999,
+  currency: 'USD',
   pageUrl: window.location.href,
+});
+
+await growthcloud.track('purchase', {
+  orderId: 'ORD-1001',
+  value: 4999,
+});
+
+// 3) Full profile sync (optional alternative to identify)
+await growthcloud.leadSync({
+  email: 'sarah@acme.com',
+  firstName: 'Sarah',
+  company: 'Acme Corp',
+  source: 'crm_sync',
+});
+
+// 4) Custom form payload (or rely on autoCaptureForms)
+await growthcloud.submitForm('contact_us', {
+  email: 'sarah@acme.com',
+  message: 'Need a demo',
+  budget: '10k',
 });`;
 
   return (
