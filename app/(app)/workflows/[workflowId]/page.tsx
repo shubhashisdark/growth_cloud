@@ -78,6 +78,7 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ workf
 
   const runs = runsData?.data?.items ?? [];
   const runsMeta = runsData?.meta;
+  const matchedLeads = runsData?.data?.matchedLeads ?? [];
 
   const handleTrigger = async () => {
     await triggerWorkflow.mutateAsync({ workflowId });
@@ -209,12 +210,25 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ workf
                 <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Loading runs...
               </div>
             ) : runs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-[#64748B] text-center">
+              <div className="flex flex-col items-center justify-center py-12 text-[#64748B] text-center px-6">
                 <Clock className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-sm font-medium text-[#F1F5F9]">{runSearch ? "No matching runs" : "No runs yet"}</p>
-                <p className="text-xs mt-1">
-                  {runSearch ? "Try another email, lead ID, or status" : "Trigger a manual run to see execution history"}
-                </p>
+                {runSearch && matchedLeads.length > 0 ? (
+                  <>
+                    <p className="text-sm font-medium text-[#F1F5F9]">Lead found — no runs for this workflow</p>
+                    <p className="text-xs mt-2 max-w-md">
+                      {matchedLeads[0].name || matchedLeads[0].email} exists, but this workflow never ran for them.
+                      Welcome emails only fire on <span className="text-[#94A3B8]">new</span> lead creates (`lead_created`), not updates.
+                    </p>
+                    <p className="text-[11px] mt-2 font-mono text-[#64748B]">{matchedLeads[0].id}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-[#F1F5F9]">{runSearch ? "No matching runs" : "No runs yet"}</p>
+                    <p className="text-xs mt-1">
+                      {runSearch ? "Try another email, lead ID, or status" : "Trigger a manual run to see execution history"}
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-white/6">

@@ -195,21 +195,24 @@ workflowsRouter.get("/:workflowId/runs", requireAuth, requireWorkspaceMember(), 
 
   const where: Record<string, unknown> = { workflowId };
 
+  const matchedLeadIds = q
+    ? await prisma.lead.findMany({
+        where: {
+          workspaceId,
+          OR: [
+            { email: { contains: q, mode: "insensitive" } },
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { id: q },
+          ],
+        },
+        select: { id: true, email: true, firstName: true, lastName: true },
+        take: 100,
+      })
+    : [];
+
   if (q) {
-    const matchingLeads = await prisma.lead.findMany({
-      where: {
-        workspaceId,
-        OR: [
-          { email: { contains: q, mode: "insensitive" } },
-          { firstName: { contains: q, mode: "insensitive" } },
-          { lastName: { contains: q, mode: "insensitive" } },
-          { id: q },
-        ],
-      },
-      select: { id: true },
-      take: 100,
-    });
-    const leadIds = matchingLeads.map((l) => l.id);
+    const leadIds = matchedLeadIds.map((l) => l.id);
     const statusMatch = ["running", "completed", "failed", "cancelled"].includes(q.toLowerCase())
       ? q.toLowerCase()
       : null;
@@ -259,6 +262,14 @@ workflowsRouter.get("/:workflowId/runs", requireAuth, requireWorkspaceMember(), 
           durationMs: r.finishedAt ? r.finishedAt.getTime() - r.startedAt.getTime() : null,
         };
       }),
+      matchedLeads:
+        total === 0 && matchedLeadIds.length > 0
+          ? matchedLeadIds.map((l) => ({
+              id: l.id,
+              email: l.email,
+              name: `${l.firstName} ${l.lastName}`.trim(),
+            }))
+          : [],
     },
     meta: { total, page, limit, pages: Math.ceil(total / limit), timestamp: new Date().toISOString() },
     error: null,

@@ -114,7 +114,13 @@ export function useWorkflowRuns(workflowId: string, page = 1, limit = 20, worksp
         limit: String(limit),
       });
       if (search) params.set("q", search);
-      return fetchBackendJson<{ data: { items: WorkflowRun[] }; meta: { total: number; pages: number } }>(
+      return fetchBackendJson<{
+        data: {
+          items: WorkflowRun[];
+          matchedLeads?: Array<{ id: string; email: string; name: string }>;
+        };
+        meta: { total: number; pages: number };
+      }>(
         `/api/v1/workflows/${workflowId}/runs?${params.toString()}`,
         { method: "GET", headers: getWorkspaceAuthHeaders(ws, token) }
       );
