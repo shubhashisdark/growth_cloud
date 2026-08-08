@@ -40,6 +40,8 @@ export type WorkflowRun = {
   id: string;
   workflowId: string;
   leadId: string | null;
+  leadEmail?: string | null;
+  leadName?: string | null;
   status: "running" | "completed" | "failed" | "cancelled";
   triggerEvent: string;
   errorMessage: string | null;
@@ -96,19 +98,27 @@ export function useWorkflow(workflowId: string, workspaceId?: string) {
   });
 }
 
-export function useWorkflowRuns(workflowId: string, page = 1, limit = 20, workspaceId?: string) {
+export function useWorkflowRuns(workflowId: string, page = 1, limit = 20, workspaceId?: string, q = "") {
   const token = useAccessToken();
   const sessionWorkspace =
     useAuthSessionStore((state) => state.session?.workspaceId ?? state.session?.user?.memberships?.[0]?.workspaceId ?? "");
   const ws = workspaceId || sessionWorkspace;
+  const search = q.trim();
 
   return useQuery({
-    queryKey: ["workflow-runs", workflowId, page, ws, token],
-    queryFn: () =>
-      fetchBackendJson<{ data: { items: WorkflowRun[] }; meta: { total: number; pages: number } }>(
-        `/api/v1/workflows/${workflowId}/runs?workspaceId=${encodeURIComponent(ws)}&page=${page}&limit=${limit}`,
+    queryKey: ["workflow-runs", workflowId, page, limit, search, ws, token],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        workspaceId: ws,
+        page: String(page),
+        limit: String(limit),
+      });
+      if (search) params.set("q", search);
+      return fetchBackendJson<{ data: { items: WorkflowRun[] }; meta: { total: number; pages: number } }>(
+        `/api/v1/workflows/${workflowId}/runs?${params.toString()}`,
         { method: "GET", headers: getWorkspaceAuthHeaders(ws, token) }
-      ),
+      );
+    },
     enabled: !!workflowId && !!ws && !!token,
   });
 }

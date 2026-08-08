@@ -188,33 +188,77 @@ workflowsRouter.get("/:workflowId/runs", requireAuth, requireWorkspaceMember(), 
   const workflowId = req.params.workflowId as string;
   const page = Math.max(1, Number(req.query.page ?? 1));
   const limit = Math.min(50, Number(req.query.limit ?? 20));
+  const q = String(req.query.q ?? "").trim();
 
   const wf = await prisma.workflow.findFirst({ where: { id: workflowId, workspaceId } });
   if (!wf) return res.status(404).json({ data: null, error: { code: "NOT_FOUND", message: "Workflow not found" }, meta: {} });
 
+  const where: Record<string, unknown> = { workflowId };
+
+  if (q) {
+    const matchingLeads = await prisma.lead.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { email: { contains: q, mode: "insensitive" } },
+          { firstName: { contains: q, mode: "insensitive" } },
+          { lastName: { contains: q, mode: "insensitive" } },
+          { id: q },
+        ],
+      },
+      select: { id: true },
+      take: 100,
+    });
+    const leadIds = matchingLeads.map((l) => l.id);
+    const statusMatch = ["running", "completed", "failed", "cancelled"].includes(q.toLowerCase())
+      ? q.toLowerCase()
+      : null;
+    where.OR = [
+      { leadId: q },
+      ...(leadIds.length ? [{ leadId: { in: leadIds } }] : []),
+      { triggerEvent: { contains: q, mode: "insensitive" } },
+      { id: q },
+      ...(statusMatch ? [{ status: statusMatch }] : []),
+    ];
+  }
+
   const [runs, total] = await Promise.all([
     prisma.workflowRun.findMany({
-      where: { workflowId },
+      where,
       orderBy: { startedAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.workflowRun.count({ where: { workflowId } }),
+    prisma.workflowRun.count({ where }),
   ]);
+
+  const runLeadIds = [...new Set(runs.map((r) => r.leadId).filter(Boolean))] as string[];
+  const leads = runLeadIds.length
+    ? await prisma.lead.findMany({
+        where: { id: { in: runLeadIds }, workspaceId },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      })
+    : [];
+  const leadById = Object.fromEntries(leads.map((l) => [l.id, l]));
 
   res.json({
     data: {
-      items: runs.map((r) => ({
-        id: r.id,
-        workflowId: r.workflowId,
-        leadId: r.leadId,
-        status: r.status,
-        triggerEvent: r.triggerEvent,
-        errorMessage: r.errorMessage,
-        startedAt: r.startedAt,
-        finishedAt: r.finishedAt,
-        durationMs: r.finishedAt ? r.finishedAt.getTime() - r.startedAt.getTime() : null,
-      })),
+      items: runs.map((r) => {
+        const lead = r.leadId ? leadById[r.leadId] : null;
+        return {
+          id: r.id,
+          workflowId: r.workflowId,
+          leadId: r.leadId,
+          leadEmail: lead?.email ?? null,
+          leadName: lead ? `${lead.firstName} ${lead.lastName}`.trim() : null,
+          status: r.status,
+          triggerEvent: r.triggerEvent,
+          errorMessage: r.errorMessage,
+          startedAt: r.startedAt,
+          finishedAt: r.finishedAt,
+          durationMs: r.finishedAt ? r.finishedAt.getTime() - r.startedAt.getTime() : null,
+        };
+      }),
     },
     meta: { total, page, limit, pages: Math.ceil(total / limit), timestamp: new Date().toISOString() },
     error: null,

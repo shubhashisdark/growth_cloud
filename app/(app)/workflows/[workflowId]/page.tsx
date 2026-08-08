@@ -1,14 +1,15 @@
 "use client";
 
-import React, { use, useState } from "react";
+import React, { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Zap, ArrowLeft, RefreshCw, Play, CheckCircle2, XCircle, Clock,
-  ChevronRight, BarChart3,
+  ChevronRight, BarChart3, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useWorkflow, useWorkflowRuns, useTriggerWorkflow, useWorkflowRunDetail } from "@/hooks/useWorkflows";
 import { cn } from "@/lib/utils";
 
@@ -60,9 +61,19 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ workf
   const router = useRouter();
   const [page, setPage] = useState(1);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [runSearch, setRunSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setRunSearch(searchInput);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const { data: workflow, isLoading: wfLoading } = useWorkflow(workflowId);
-  const { data: runsData, isLoading: runsLoading, refetch } = useWorkflowRuns(workflowId, page);
+  const { data: runsData, isLoading: runsLoading, refetch } = useWorkflowRuns(workflowId, page, 20, undefined, runSearch);
   const triggerWorkflow = useTriggerWorkflow();
 
   const runs = runsData?.data?.items ?? [];
@@ -171,15 +182,26 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ workf
         <div className="lg:col-span-2">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="rounded-2xl border border-white/8 bg-[#0D1117] overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-[#64748B]" />
-                <span className="text-sm font-medium">Run History</span>
-                {runsMeta && <span className="text-xs text-[#64748B]">({runsMeta.total} total)</span>}
+            <div className="flex flex-col gap-3 px-6 py-4 border-b border-white/8">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-[#64748B]" />
+                  <span className="text-sm font-medium">Run History</span>
+                  {runsMeta && <span className="text-xs text-[#64748B]">({runsMeta.total} total)</span>}
+                </div>
+                <button onClick={() => refetch()} className="text-[#64748B] hover:text-[#38BDF8] transition-colors">
+                  <RefreshCw className="w-4 h-4" />
+                </button>
               </div>
-              <button onClick={() => refetch()} className="text-[#64748B] hover:text-[#38BDF8] transition-colors">
-                <RefreshCw className="w-4 h-4" />
-              </button>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#64748B]" />
+                <Input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search by email, lead name, lead ID, status…"
+                  className="h-9 pl-9 bg-[#070A14] border-white/8 text-[#F1F5F9] placeholder:text-[#64748B] text-xs"
+                />
+              </div>
             </div>
 
             {runsLoading ? (
@@ -189,8 +211,10 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ workf
             ) : runs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-[#64748B] text-center">
                 <Clock className="w-8 h-8 mb-2 opacity-30" />
-                <p className="text-sm font-medium text-[#F1F5F9]">No runs yet</p>
-                <p className="text-xs mt-1">Trigger a manual run to see execution history</p>
+                <p className="text-sm font-medium text-[#F1F5F9]">{runSearch ? "No matching runs" : "No runs yet"}</p>
+                <p className="text-xs mt-1">
+                  {runSearch ? "Try another email, lead ID, or status" : "Trigger a manual run to see execution history"}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-white/6">
@@ -202,7 +226,16 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ workf
                         statusColors[run.status] ?? "bg-[#1E2538] text-[#64748B]")}>
                         {run.status}
                       </span>
-                      <span className="text-sm text-[#F1F5F9] flex-1">{run.triggerEvent}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-[#F1F5F9]">{run.triggerEvent}</div>
+                        <div className="text-xs text-[#64748B] truncate">
+                          {run.leadEmail || run.leadName
+                            ? [run.leadName, run.leadEmail].filter(Boolean).join(" · ")
+                            : run.leadId
+                              ? `Lead ${run.leadId.slice(0, 8)}…`
+                              : "No lead"}
+                        </div>
+                      </div>
                       <span className="text-xs text-[#64748B]">
                         {run.durationMs != null ? `${run.durationMs}ms` : "—"}
                       </span>
@@ -212,6 +245,12 @@ export default function WorkflowDetailPage({ params }: { params: Promise<{ workf
 
                     {selectedRun === run.id && (
                       <div className="bg-[#070A14] border-t border-white/6 px-6 py-4 space-y-2">
+                        {run.leadId && (
+                          <p className="text-xs text-[#64748B] mb-2">
+                            Lead ID: <span className="font-mono text-[#94A3B8]">{run.leadId}</span>
+                            {run.leadEmail ? ` · ${run.leadEmail}` : ""}
+                          </p>
+                        )}
                         {run.errorMessage && <p className="text-xs text-[#F87171] mb-2">{run.errorMessage}</p>}
                         <RunStepLogs workflowId={workflowId} runId={run.id} />
                       </div>
