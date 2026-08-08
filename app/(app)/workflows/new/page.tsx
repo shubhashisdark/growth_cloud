@@ -90,12 +90,31 @@ function StepCard({ step, index, onUpdate, onDelete }: {
             </select>
           </div>
           {step.actionType === "send_email" && (
-            <div>
-              <label className="text-xs text-[#64748B] mb-1 block">Subject</label>
-              <Input value={(step.config?.subject as string) ?? ""}
-                onChange={(e) => onUpdate({ ...step, config: { ...step.config, subject: e.target.value } })}
-                placeholder="Email subject" className="h-9 text-sm bg-[#070A14] border-white/8 text-[#F1F5F9]" />
-            </div>
+            <>
+              <div>
+                <label className="text-xs text-[#64748B] mb-1 block">Subject</label>
+                <Input
+                  value={(step.config?.subject as string) ?? ""}
+                  onChange={(e) => onUpdate({ ...step, config: { ...step.config, subject: e.target.value } })}
+                  placeholder="Welcome {{firstName}}!"
+                  className="h-9 text-sm bg-[#070A14] border-white/8 text-[#F1F5F9]"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-[#64748B] mb-1 block">Body</label>
+                <textarea
+                  value={(step.config?.body as string) ?? ""}
+                  onChange={(e) => onUpdate({ ...step, config: { ...step.config, body: e.target.value } })}
+                  placeholder="Hi {{firstName}}, welcome to Growth Cloud..."
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-white/8 bg-[#070A14] text-[#F1F5F9] focus:outline-none focus:border-[#38BDF8]/40 resize-y"
+                />
+                <p className="mt-1 text-[11px] text-[#64748B]">
+                  Dynamic tags: {"{{firstName}}"}, {"{{lastName}}"}, {"{{fullName}}"}, {"{{email}}"},{" "}
+                  {"{{company}}"}, {"{{score}}"}, {"{{lifecycleStage}}"}, {"{{tags}}"}, plus any custom field keys.
+                </p>
+              </div>
+            </>
           )}
           {step.actionType === "update_score" && (
             <div>
@@ -177,7 +196,7 @@ export default function NewWorkflowPage() {
   const [triggerType, setTriggerType] = useState("lead_created");
   const [status, setStatus] = useState<"active" | "paused">("paused");
   const [steps, setSteps] = useState<UIStep[]>([
-    { type: "action", actionType: "send_email", config: { subject: "Welcome {{firstName}}!" } },
+    { type: "action", actionType: "send_email", config: { subject: "Welcome {{firstName}}!", body: "Hi {{firstName}}, welcome aboard!" } },
   ]);
   const [saving, setSaving] = useState(false);
 

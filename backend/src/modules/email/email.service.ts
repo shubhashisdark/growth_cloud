@@ -220,6 +220,60 @@ export async function sendEmailWithFallback(message: EmailMessage) {
   );
 }
 
+export function buildLeadEmailVariables(
+  lead: {
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    company?: string | null;
+    source?: string | null;
+    status?: string | null;
+    score?: number | null;
+    lifecycleStage?: string | null;
+    tagsJson?: string | null;
+    customFieldsJson?: string | null;
+  },
+  extra: Record<string, string> = {}
+): Record<string, string> {
+  let custom: Record<string, unknown> = {};
+  try {
+    custom = JSON.parse(lead.customFieldsJson || "{}") as Record<string, unknown>;
+  } catch {
+    custom = {};
+  }
+
+  let tags: string[] = [];
+  try {
+    tags = JSON.parse(lead.tagsJson || "[]") as string[];
+  } catch {
+    tags = [];
+  }
+
+  const firstName = (lead.firstName || "").trim() || "there";
+  const lastName = (lead.lastName || "").trim();
+  const variables: Record<string, string> = {
+    firstName,
+    lastName,
+    email: lead.email || "",
+    company: (lead.company || "").trim(),
+    source: lead.source || "",
+    status: lead.status || "",
+    score: String(lead.score ?? 0),
+    lifecycleStage: lead.lifecycleStage || "",
+    tags: tags.join(", "),
+    fullName: [firstName === "there" ? "" : firstName, lastName].filter(Boolean).join(" ") || firstName,
+  };
+
+  for (const [key, value] of Object.entries(custom)) {
+    if (value == null) continue;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      variables[key] = String(value);
+    }
+  }
+
+  return { ...variables, ...extra };
+}
+
 export function renderEmailTemplate(
   template: { subject: string; html: string; text: string },
   variables: Record<string, string>

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../data/prisma.js";
 import { evaluateCondition, type WorkflowDefinition, type WorkflowStep } from "./workflow.executor.js";
-import { sendEmailWithFallback } from "../email/email.service.js";
+import { buildLeadEmailVariables, renderEmailTemplate, sendEmailWithFallback } from "../email/email.service.js";
 
 const MAX_RETRIES = 3;
 
@@ -21,7 +21,9 @@ async function executeAction(
     score: number;
     lifecycleStage: string;
     status: string;
+    source?: string;
     tagsJson: string;
+    customFieldsJson?: string;
   },
   runId: string
 ): Promise<{ success: boolean; output: Record<string, unknown>; error?: string }> {
@@ -29,20 +31,27 @@ async function executeAction(
 
   switch (step.actionType) {
     case "send_email": {
-      const subject = String(config.subject ?? "Hello from Growth Cloud")
-        .replace("{{firstName}}", lead.firstName)
-        .replace("{{lastName}}", lead.lastName)
-        .replace("{{email}}", lead.email);
-      const body = String(config.body ?? "Hi {{firstName}},")
-        .replace("{{firstName}}", lead.firstName)
-        .replace("{{lastName}}", lead.lastName);
+      const variables = buildLeadEmailVariables(lead);
+      const rawSubject = String(config.subject || "Hello from Growth Cloud");
+      const rawBody = String(config.body || "Hi {{firstName}},");
+      const rendered = renderEmailTemplate(
+        {
+          subject: rawSubject,
+          html: rawBody.replace(/\n/g, "<br/>"),
+          text: rawBody,
+        },
+        variables
+      );
       await sendEmailWithFallback({
         to: lead.email,
-        subject,
-        html: `<p>${body}</p>`,
-        text: body,
+        subject: rendered.subject,
+        html: `<p>${rendered.html}</p>`,
+        text: rendered.text,
       });
-      return { success: true, output: { emailSentTo: lead.email, subject } };
+      return {
+        success: true,
+        output: { emailSentTo: lead.email, subject: rendered.subject, body: rendered.text },
+      };
     }
 
     case "update_score": {
